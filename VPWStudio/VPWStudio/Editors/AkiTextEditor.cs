@@ -21,6 +21,16 @@ namespace VPWStudio.Editors
 		/// </summary>
 		private int FileKey = -1;
 
+		/// <summary>
+		/// Current search text
+		/// </summary>
+		protected string CurSearchTerm = string.Empty;
+
+		/// <summary>
+		/// Current search index
+		/// </summary>
+		protected int CurSearchIndex = 0;
+
 		#region Constructors
 		/// <summary>
 		/// Constructor using file ID.
@@ -332,5 +342,38 @@ namespace VPWStudio.Editors
 				cbTextEntries.SelectedIndex = gtd.DestinationEntry;
 			}
 		}
-	}
+
+        private void searchToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+			// note: search is case sensitive because I'm too damn lazy to code it otherwise
+			// todo: make this more like the filetable dialog, where you can search multiple times without needing to enter a dialog
+			FileTable_SearchDialog search = new FileTable_SearchDialog(CurSearchTerm);
+			if (search.ShowDialog() == DialogResult.OK)
+			{
+				bool SearchFound = false;
+				if (!CurSearchTerm.Equals(search.SearchText))
+				{
+					CurSearchIndex = 0;
+                }
+
+				CurSearchTerm = search.SearchText;
+
+				for (; CurSearchIndex < CurTextArchive.Entries.Count; CurSearchIndex++)
+				{
+					if (CurTextArchive.Entries[CurSearchIndex].Text.Contains(CurSearchTerm))
+					{
+						cbTextEntries.SelectedIndex = CurSearchIndex;
+                        CurSearchIndex++;
+                        SearchFound = true;
+                        break;
+                    }
+                }
+
+				if (!SearchFound)
+				{
+					MessageBox.Show(string.Format("Could not find '{0}'.", CurSearchTerm), "VPW Studio");
+				}
+            }
+        }
+    }
 }
