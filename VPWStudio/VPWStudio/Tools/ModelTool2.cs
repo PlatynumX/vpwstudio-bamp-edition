@@ -101,9 +101,9 @@ namespace VPWStudio
 			tbNumFaces.Text = String.Format("{0} (0x{0:X2})", CurModel.NumFaces);
 			tbNumFacesTopBit.Text = String.Format("{0}", CurModel.UnknownFacesTopBit >> 7);
 			tbVertexInfluence.Text = String.Format("{0} (0x{0:X2})", CurModel.VertexInfluence);
-			tbOffsetX.Text = String.Format("{0} (0x{0:X2})", (sbyte)CurModel.OffsetX);
-			tbOffsetY.Text = String.Format("{0} (0x{0:X2})", (sbyte)CurModel.OffsetY);
-			tbOffsetZ.Text = String.Format("{0} (0x{0:X2})", (sbyte)CurModel.OffsetZ);
+			tbOffsetX.Text = String.Format("{0} (0x{0:X2}; shifted {1} (0x{1:X}))", (sbyte)CurModel.OffsetX, (((sbyte)CurModel.OffsetX) << 0x18) >> 0x14);
+			tbOffsetY.Text = String.Format("{0} (0x{0:X2}; shifted {1} (0x{1:X}))", (sbyte)CurModel.OffsetY, (((sbyte)CurModel.OffsetY) << 0x18) >> 0x14);
+			tbOffsetZ.Text = String.Format("{0} (0x{0:X2}; shifted {1} (0x{1:X}))", (sbyte)CurModel.OffsetZ, (((sbyte)CurModel.OffsetZ) << 0x18) >> 0x14);
 
 			int texSizeH = ((CurModel.TextureSize & 0xF0) >> 4) * 8;
 			int texSizeV = ((CurModel.TextureSize & 0x0F)) * 8;
