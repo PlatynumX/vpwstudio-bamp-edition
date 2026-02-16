@@ -206,6 +206,8 @@ but comments starting with special characters have different meanings.</p>
 <li><code>$</code> &ndash; <strong>Data Location</strong>: Specific locations
 VPW Studio looks for to handle ROM reads/writes.</li>
 <li><code>%</code> &ndash; <strong>Code Change</strong>: Locations used for modifying game code.</li>
+<li><code>@</code> &ndash; <strong>Code Segment</strong>: Locations of code segments (overlays).
+Currently unused.</li>
 </ul>
 
 <p>Special location strings are mapped in the program, so you can't make things up
@@ -238,12 +240,18 @@ location strings:</p>
 </ul>
 
 <strong>Introduction Sequence Locations</strong>
-<p><em>WCW/nWo Revenge</em> and later only. Ending sequences use the same formats,
-but are not yet handled.</p>
+<p><em>Virtual Pro-Wrestling 64</em> only:</p>
+<ul>
+<li><code>$INTRODEFS_VPW64_ANIMS</code> &ndash; Location of introduction sequence animation definitions.</li>
+</ul>
+
+<p><em>WCW/nWo Revenge</em> and later:<br />
+(Ending sequences use the same formats, but are not yet handled.)</p>
 <ul>
 <li><code>$INTRODEFS_LATER_ANIMS</code> &ndash; Location of introduction sequence animation definitions.</li>
 <li><code>$INTRODEFS_LATER_IMAGES</code> &ndash; Location of introduction sequence image definitions.</li>
 <li><code>$INTRODEFS_LATER_SEQUENCE</code> &ndash; Location of sequence data for introduction sequence.</li>
+<li><code>$INTRODEFS_LATER_CAMERAMOTION</code> &ndash; Location of camera motion data for introduction sequence.</li>
 </ul>
 
 <strong>Facial Hair, Facepaint, and Face Accessories</strong>
@@ -283,11 +291,26 @@ but are not yet handled.</p>
 <li><code>$GLOBAL_TEXT_POINTERS</code> &ndash; ROM location of pointers to Global Text entries.</li>
 </ul>
 
+<strong>"Master Move Mods"</strong>
+<ul>
+<li><code>$MASTER_MOVE_MODS_FIRST_ENTRIES</code> &ndash; Location of list of first entries in the Master Move Mods section.</li>
+<li><code>$MASTER_MOVE_MODS</code> &ndash; Location of "Master Move Mods" values</li>
+<li><code>$MASTER_MOVE_MOD_POINTERS</code> &ndash; Location to the Master Move Mods pointer table.</li>
+</ul>
+
+<strong>1BPP Blood Textures</strong>
+<p>Used in every game but <em>WWF No Mercy</em> (which uses textures found in the file table instead).</p>
+<ul>
+<li><code>$BLOODTEXTURE_FACE</code> &ndash; Location of 1BPP blood texture overlaid onto the face. (32x64px)</li>
+<li><code>$BLOODTEXTURE_NECK</code> &ndash; Location of 1BPP blood texture overlaid onto the neck. (64x32px)</li>
+<li><code>$BLOODTEXTURE_CHEST1</code> &ndash; Location of 1BPP blood texture overlaid onto the chest. (64x32px, mirrored horizontally to cover 128x32px)</li>
+<li><code>$BLOODTEXTURE_CHEST2</code> &ndash; Location of 1BPP blood texture overlaid onto the chest. (64x32px, mirrored vertically to cover 64x64px)</li>
+</ul>
+
 <strong>Currently Ungrouped</strong>
 <ul>
 <li><code>$DEFAULT_RULESETS</code> &ndash; Default ruleset data (at least in VPW2 and No Mercy; might be in other games)</li>
 <li><code>$ATTRACT_MODE_DEMO_MATCHES</code> &ndash; Location of Demo Match data (VPW2 and No Mercy only; both use slightly different formats)</li>
-<li><code>$MASTER_MOVE_MODS</code> &ndash; "Master Move Mods" values</li>
 </ul>
 
 <strong>Code Changes</strong>

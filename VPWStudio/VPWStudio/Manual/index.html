@@ -17,19 +17,20 @@
 <hr />
 
 <h2>Table of Contents</h2>
-<p>Sections in <strong>bold</strong> are considered important; don't skip them.</p>
+<p>Sections that begin with the <span class="infoMark">🛈</span> mark and have
+<strong>bold</strong> text are considered important. Please read them.</p>
 <h3>Chapter 1: Introductory Material</h3>
 <ol>
 <li><a href="#Warning">Warning</a></li>
 <li><a href="#Intro">Introduction</a></li>
 <li><a href="#Requirements">Requirements and Notes</a></li>
-<li><a href="#HackingWorkflow"><strong>Hacking Workflow</strong></a>
+<li><span class="infoMark">🛈</span>&nbsp;<a href="#HackingWorkflow"><strong>Hacking Workflow</strong></a>
 <li><a href="#MainInterface">Main Interface</a></li>
 <li><a href="#ProgramOptions">Program Options</a></li>
 <li><a href="#ProjectFiles">Project Files</a></li>
-<li><a href="#WhichGameToHack"><strong>Which Game To Hack?</strong></a></li>
+<li><span class="infoMark">🛈</span>&nbsp;<a href="#WhichGameToHack"><strong>Which Game To Hack?</strong></a></li>
 <li><a href="#CommonDataFormats">Common Data Formats</a></li>
-<li><a href="#TextureWorkflow"><strong>Texture and Palette Workflow</strong></a>
+<li><span class="infoMark">🛈</span>&nbsp;<a href="#TextureWorkflow"><strong>Texture and Palette Workflow</strong></a>
 <ol>
 <li><a href="#TextureSources">Texture Sources</a></li>
 <li><a href="#ColorFormat">Color Format</a></li>
@@ -50,7 +51,7 @@
 <li><a href="#CostumeItems">Costume Items</a></li>
 <li><a href="#DemoMatches">Demo Matches</a></li>
 <li><a href="#Entrances">Entrances</a></li>
-<li><a href="#FileTable"><strong>File Table</strong></a><ol>
+<li><span class="infoMark">🛈</span>&nbsp;<a href="#FileTable"><strong>File Table</strong></a><ol>
 <li><a href="#FileTableEntryInfo">File Table Entry Information</a></li>
 <li><a href="#Editors">Viewers and Editors</a>
 	<ol>
@@ -214,7 +215,7 @@ various pointers to be rewritten to point to new locations. That's even
 (e.g. the games assume that the animation file IDs lie in certain ranges),
 which are different per game, and not all the same, either. VPW Studio is not
 equipped to handle this situation, which is better handled by a full disassembly
-of the game(s).</p>
+of the game(s). (Or, as freem often says: <a href="https://vpw.ajworld.net/vpw2freem/requires_decomp.html">"it requires a decomp"</a>.)</p>
 
 <p>Even with these limitations, it's possible to use VPW Studio (along with some
 other tools) to create a ROM hack of AKI's wrestling games on Nintendo 64 that will
@@ -444,7 +445,7 @@ This is a non-starter.</li>
 </ul>
 
 <hr />
-<h2><a name="HackingWorkflow">Hacking Workflow</a></h2>
+<h2><span class="infoMark">🛈</span>&nbsp;<a name="HackingWorkflow">Hacking Workflow</a></h2>
 <p>VPW Studio's usage conventions are largely dictated by external factors.
 Some of it is caused by VPW Studio being incomplete, while others are dictated
 by the game's internals.</p>
@@ -455,9 +456,10 @@ events when "Build ROM" is called:</p>
 
 <ol>
 <li><strong>Base ROM</strong> &ndash; The Base ROM is the original ROM that will
-be edited by VPW Studio. If you want your ROM changes to appear in the built/output
-ROM, you <strong>MUST</strong> make the changes in the Base ROM. Any changes made to
-the built/output ROM will disappear once you (re-)build the project in VPW Studio.<br />
+be edited by VPW Studio. If you want your non-VPW Studio ROM changes to appear
+in the built/output ROM, you <strong>MUST</strong> make the changes in the Base ROM.
+Any changes made to the built/output ROM will disappear once you (re-)build the
+project in VPW Studio.<br />
 You do not have to worry about the internal checksums of the Base ROM, as they are
 re-calculated at the end of the build process.</li>
 <li><strong>Non-Filetable Changes</strong> &ndash; Anything that appears before
@@ -727,7 +729,7 @@ the ROM before playing it. Otherwise, it will load the last built version of the
 <p>For this to work, you must set up the emulator details in the <a href="#ProgramOptions">Program Options</a> section.</p>
 
 <hr />
-<h2><a name="WhichGameToHack">Which Game To Hack?</a></h2>
+<h2><span class="infoMark">🛈</span>&nbsp;<a name="WhichGameToHack">Which Game To Hack?</a></h2>
 <p>If you are not already familiar with the capabilities of each of the supported
 games, you may have trouble picking a base game to start your project. Some features
 only exist in certain games, and if you are banking on the presence of one of those
@@ -1046,7 +1048,7 @@ The current recommended workflow is to use Texture64 to save the I4 format textu
 and import that data via the File Table.</p>
 
 <hr />
-<h2><a name="TextureWorkflow">Texture and Palette Workflow</a></h2>
+<h2><span class="infoMark">🛈</span>&nbsp;<a name="TextureWorkflow">Texture and Palette Workflow</a></h2>
 <p>(Notice: This section primarily deals with workflows targeting the Nintendo 64.
 Information on targeting PlayStation 1 will be added once VPW Studio is capable
 of handling it.)</p>
@@ -1170,7 +1172,7 @@ file.</p>
 <p>As mentioned in the Common Data Formats section, a <code>Ci4Palette</code>
 can have multiple "sub-palettes", and this is key to allowing the costume color
 changing system to work (in all games after VPW64). The first 16 colors of a
-costume texture's palette is dedicated to the colors you'd see if you set the
+costume texture's palette are dedicated to the colors you'd see if you set the
 custom color to 0 (WM2K/VPW2/No Mercy). The colors used in the first set <em>do
 not</em> need to be found in the custom color palette. The second set of 16 colors
 should use the "pure" green and blue values that define the changeable colors.
@@ -1231,8 +1233,8 @@ they can't possibly be paletted), you have to manually fix the transparency in a
 to be transparent via a hex editor. Start by using the "PNG to AKI TEX" option in
 the Tools menu. This will create a <code>.tex</code> file which can be edited.</p>
 
-<p>TEX files start with 16 bytes of header data, which is followed by the palette
-data (starting at file offset <code>0x10</code>). Each color takes up two bytes in
+<p>TEX files start with 16 bytes of header data, followed by the palette data
+(starting at file offset <code>0x10</code>). Each color takes up two bytes in
 the palette. If it's a 16-color texture, there will be 32 bytes of palette data.
 If it's a 256-color texture, there will be 512 bytes of palette data. The key to
 transparency is the least significant bit of the <em>second</em> byte of a palette
@@ -1426,7 +1428,7 @@ and later, which can be found in the <a href="#Wrestlers">Wrestlers</a> section.
 <p>(todo: primarily Titantron-related; not yet designed)</p>
 
 <hr />
-<h2><a name="FileTable">File Table</a></h2>
+<h2><span class="infoMark">🛈</span>&nbsp;<a name="FileTable">File Table</a></h2>
 <p>The File Table editor, accessed from Project &rarr; File Table, allows you to
 view and edit the entries in the game's File Table. A large portion of the game's
 data is found here, including wrestler movesets, parameters, move data, animations,
