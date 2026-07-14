@@ -1,9 +1,10 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Data;
 using System.Drawing;
 using System.IO;
+using System.Globalization;
 using System.Text;
 using System.Threading.Tasks;
 using System.Windows.Forms;
@@ -218,6 +219,15 @@ namespace VPWStudio
 
 
 			br.Close();
+
+			// BAMP_INTRO_EDITOR_PERSISTENCE
+			if (TryLoadSavedIntroData())
+			{
+			    hasAnimLocation = IntroAnimations.Count > 0;
+			    hasImageLocation = IntroImages.Count > 0;
+			    hasSeqLocation = IntroSequenceItems.Count > 0;
+			}
+
 			PopulateRows(hasAnimLocation, hasImageLocation, hasSeqLocation);
 		}
 
@@ -283,39 +293,496 @@ namespace VPWStudio
 			}
 		}
 
-		private void buttonOK_Click(object sender, EventArgs e)
-		{
-			DialogResult = DialogResult.OK;
 
-			// ugh I have to parse DataGridViews again?? fuck.
+        private enum IntroCellValueType
+        {
+            DecimalByte,
+            DecimalInt16,
+            DecimalUInt16,
+            HexByte,
+            HexUInt16,
+            HexUInt32
+        }
 
-			for (int i = 0; i < dgvAnimations.Rows.Count; i++)
-			{
-				// wrestler id4
-				// timing a
-				// animation id
-				// timing b
-				// xpos, ypos, zpos, rotation
-				// flags, movespeed, unknown, costume
-			}
+        private bool TryLoadSavedIntroData()
+        {
+            string relativePath =
+                Program.CurrentProject.Settings.GameIntroDefinitionFilePath;
 
-			for (int i = 0; i < dgvImages.Rows.Count; i++)
-			{
-				// file id
-				// width, height
-				// vert. displacement
-				// horiz. stretch
-				// flags
-				// scroll speed
-				// unknown
-			}
+            if (String.IsNullOrEmpty(relativePath))
+            {
+                return false;
+            }
 
-			for (int i = 0; i < dgvSequence.Rows.Count; i++)
-			{
-			}
+            string absolutePath = Program.ConvertRelativePath(relativePath);
+            if (String.IsNullOrEmpty(absolutePath) || !File.Exists(absolutePath))
+            {
+                return false;
+            }
 
-			Close();
-		}
+            try
+            {
+                GameIntroDefFile introFile = new GameIntroDefFile();
+
+                using (FileStream stream = new FileStream(
+                    absolutePath, FileMode.Open, FileAccess.Read, FileShare.Read))
+                using (BinaryReader reader = new BinaryReader(stream))
+                {
+                    introFile.ReadFile(reader);
+                }
+
+                if (introFile.BaseGame != Program.CurrentProject.Settings.BaseGame ||
+                    introFile.GameType != Program.CurrentProject.Settings.GameType)
+                {
+                    Program.WarningMessageBox(
+                        "The saved intro data belongs to a different game or ROM version. " +
+                        "The base ROM data will be shown instead.");
+                    return false;
+                }
+
+                IntroAnimations.Clear();
+                IntroImages.Clear();
+                IntroSequenceItems.Clear();
+
+                AnimStartLocation = introFile.AnimationOffset;
+                ImgStartLocation = introFile.ImageOffset;
+                SeqStartLocation = introFile.SequenceOffset;
+
+                using (MemoryStream stream = new MemoryStream(introFile.AnimationData))
+                using (BinaryReader reader = new BinaryReader(stream))
+                {
+                    while (stream.Position < stream.Length)
+                    {
+                        IntroAnimations.Add(new IntroSequenceAnimation_Later(reader));
+                    }
+                }
+
+                using (MemoryStream stream = new MemoryStream(introFile.ImageData))
+                using (BinaryReader reader = new BinaryReader(stream))
+                {
+                    while (stream.Position < stream.Length)
+                    {
+                        IntroImages.Add(new IntroSequenceGraphic_Later(reader));
+                    }
+                }
+
+                using (MemoryStream stream = new MemoryStream(introFile.SequenceData))
+                using (BinaryReader reader = new BinaryReader(stream))
+                {
+                    while (stream.Position < stream.Length)
+                    {
+                        IntroSequenceItems.Add(new IntroSequence_Later(reader));
+                    }
+                }
+
+                return true;
+            }
+            catch (Exception ex)
+            {
+                Program.WarningMessageBox(
+                    "The saved intro data could not be loaded.\n\n" + ex.Message);
+                return false;
+            }
+        }
+
+        private bool TryReadEditorRows(out string errorMessage)
+        {
+            List<IntroSequenceAnimation_Later> animations =
+                new List<IntroSequenceAnimation_Later>();
+            List<IntroSequenceGraphic_Later> images =
+                new List<IntroSequenceGraphic_Later>();
+            List<IntroSequence_Later> sequence =
+                new List<IntroSequence_Later>();
+
+            for (int i = 0; i < dgvAnimations.Rows.Count; i++)
+            {
+                DataGridViewRow row = dgvAnimations.Rows[i];
+                if (row.IsNewRow)
+                {
+                    continue;
+                }
+
+                try
+                {
+                    IntroSequenceAnimation_Later item =
+                        new IntroSequenceAnimation_Later();
+
+                    item.WrestlerID4 = ParseHexUInt16(CellText(row, 0), "Wrestler ID4");
+                    item.TimingA = ParseDecimalInt16(CellText(row, 1), "Timing A");
+                    item.AnimationID = ParseHexUInt16(CellText(row, 2), "Animation ID");
+                    item.TimingB = ParseDecimalInt16(CellText(row, 3), "Timing B");
+                    item.XPosition = ParseDecimalInt16(CellText(row, 4), "X Position");
+                    item.YPosition = ParseDecimalInt16(CellText(row, 5), "Y Position");
+                    item.ZPosition = ParseDecimalInt16(CellText(row, 6), "Z Position");
+                    item.Rotation = ParseDecimalInt16(CellText(row, 7), "Rotation");
+                    item.AnimFlags = ParseHexByte(CellText(row, 8), "Animation Flags");
+                    item.MoveSpeed = ParseHexByte(CellText(row, 9), "Move Speed");
+                    item.Unknown = ParseHexByte(CellText(row, 10), "Unknown");
+                    item.CostumeNum = ParseHexByte(CellText(row, 11), "Costume Number");
+                    animations.Add(item);
+                }
+                catch (FormatException ex)
+                {
+                    errorMessage = String.Format(
+                        "Animation row {0}: {1}", i, ex.Message);
+                    return false;
+                }
+            }
+
+            for (int i = 0; i < dgvImages.Rows.Count; i++)
+            {
+                DataGridViewRow row = dgvImages.Rows[i];
+                if (row.IsNewRow)
+                {
+                    continue;
+                }
+
+                try
+                {
+                    IntroSequenceGraphic_Later item =
+                        new IntroSequenceGraphic_Later();
+
+                    item.FileID = ParseHexUInt16(CellText(row, 0), "File ID");
+                    item.Width = ParseDecimalUInt16(CellText(row, 1), "Width");
+                    item.Height = ParseDecimalUInt16(CellText(row, 2), "Height");
+                    item.VertDisplacement =
+                        ParseDecimalUInt16(CellText(row, 3), "Vertical Displacement");
+                    item.HorizStretch =
+                        ParseDecimalUInt16(CellText(row, 4), "Horizontal Stretch");
+                    item.Flags1 = ParseHexUInt16(CellText(row, 5), "Image Flags");
+                    item.ScrollSpeed =
+                        ParseDecimalInt16(CellText(row, 6), "Scroll Speed");
+                    item.Unknown = ParseHexUInt16(CellText(row, 7), "Unknown");
+                    images.Add(item);
+                }
+                catch (FormatException ex)
+                {
+                    errorMessage = String.Format(
+                        "Image row {0}: {1}", i, ex.Message);
+                    return false;
+                }
+            }
+
+            for (int i = 0; i < dgvSequence.Rows.Count; i++)
+            {
+                DataGridViewRow row = dgvSequence.Rows[i];
+                if (row.IsNewRow)
+                {
+                    continue;
+                }
+
+                try
+                {
+                    IntroSequence_Later item = new IntroSequence_Later();
+
+                    item.MainSequence =
+                        ParseDecimalByte(CellText(row, 0), "Main Sequence");
+                    item.SubSequence =
+                        ParseDecimalByte(CellText(row, 1), "Sub Sequence");
+                    item.Flags = ParseHexByte(CellText(row, 2), "Flags");
+                    item.Transition = ParseHexByte(CellText(row, 3), "Transition");
+                    item.SceneTime =
+                        ParseDecimalUInt16(CellText(row, 4), "Scene Time");
+                    item.CameraMotion =
+                        ParseHexUInt16(CellText(row, 5), "Camera Motion");
+                    item.Unknown = ParseHexUInt16(CellText(row, 6), "Unknown");
+                    item.StageNum = ParseHexUInt16(CellText(row, 7), "Stage Number");
+                    item.Pointer1 = ParseHexUInt32(CellText(row, 8), "Pointer 1");
+                    item.Pointer2 = ParseHexUInt32(CellText(row, 9), "Pointer 2");
+                    item.Pointer3 = ParseHexUInt32(CellText(row, 10), "Pointer 3");
+                    item.Pointer4 = ParseHexUInt32(CellText(row, 11), "Pointer 4");
+                    sequence.Add(item);
+                }
+                catch (FormatException ex)
+                {
+                    errorMessage = String.Format(
+                        "Sequence row {0}: {1}", i, ex.Message);
+                    return false;
+                }
+            }
+
+            IntroAnimations.Clear();
+            IntroAnimations.AddRange(animations);
+            IntroImages.Clear();
+            IntroImages.AddRange(images);
+            IntroSequenceItems.Clear();
+            IntroSequenceItems.AddRange(sequence);
+
+            errorMessage = String.Empty;
+            return true;
+        }
+
+        private bool TrySaveIntroData(out string errorMessage)
+        {
+            if (String.IsNullOrEmpty(Program.CurProjectPath))
+            {
+                errorMessage =
+                    "Save the VPWStudio project before saving intro changes.";
+                return false;
+            }
+
+            try
+            {
+                if (String.IsNullOrEmpty(
+                    Program.CurrentProject.Settings.ProjectFilesPath))
+                {
+                    Program.CurrentProject.Settings.ProjectFilesPath =
+                        "ProjectFiles";
+                }
+
+                string relativePath = Path.Combine(
+                    Program.CurrentProject.Settings.ProjectFilesPath,
+                    "GameIntroDefinitions.vpwsintro");
+
+                string absolutePath = Program.ConvertRelativePath(relativePath);
+                if (String.IsNullOrEmpty(absolutePath))
+                {
+                    errorMessage =
+                        "VPWStudio could not resolve the project files directory.";
+                    return false;
+                }
+
+                string directory = Path.GetDirectoryName(absolutePath);
+                if (!String.IsNullOrEmpty(directory))
+                {
+                    Directory.CreateDirectory(directory);
+                }
+
+                GameIntroDefFile introFile = new GameIntroDefFile(
+                    Program.CurrentProject.Settings.BaseGame,
+                    Program.CurrentProject.Settings.GameType);
+
+                introFile.AnimationOffset = AnimStartLocation;
+                introFile.ImageOffset = ImgStartLocation;
+                introFile.SequenceOffset = SeqStartLocation;
+                introFile.AnimationData = BuildAnimationData();
+                introFile.ImageData = BuildImageData();
+                introFile.SequenceData = BuildSequenceData();
+
+                using (FileStream stream = new FileStream(
+                    absolutePath, FileMode.Create, FileAccess.Write, FileShare.None))
+                using (BinaryWriter writer = new BinaryWriter(stream))
+                {
+                    introFile.WriteFile(writer);
+                }
+
+                Program.CurrentProject.Settings.GameIntroDefinitionFilePath =
+                    relativePath;
+                Program.UnsavedChanges = true;
+
+                errorMessage = String.Empty;
+                return true;
+            }
+            catch (Exception ex)
+            {
+                errorMessage = ex.Message;
+                return false;
+            }
+        }
+
+        private byte[] BuildAnimationData()
+        {
+            using (MemoryStream stream = new MemoryStream())
+            using (BinaryWriter writer = new BinaryWriter(stream))
+            {
+                foreach (IntroSequenceAnimation_Later item in IntroAnimations)
+                {
+                    item.WriteData(writer);
+                }
+
+                writer.Flush();
+                return stream.ToArray();
+            }
+        }
+
+        private byte[] BuildImageData()
+        {
+            using (MemoryStream stream = new MemoryStream())
+            using (BinaryWriter writer = new BinaryWriter(stream))
+            {
+                foreach (IntroSequenceGraphic_Later item in IntroImages)
+                {
+                    item.WriteData(writer);
+                }
+
+                writer.Flush();
+                return stream.ToArray();
+            }
+        }
+
+        private byte[] BuildSequenceData()
+        {
+            using (MemoryStream stream = new MemoryStream())
+            using (BinaryWriter writer = new BinaryWriter(stream))
+            {
+                foreach (IntroSequence_Later item in IntroSequenceItems)
+                {
+                    item.WriteData(writer);
+                }
+
+                writer.Flush();
+                return stream.ToArray();
+            }
+        }
+
+        private static string CellText(DataGridViewRow row, int columnIndex)
+        {
+            object value = row.Cells[columnIndex].Value;
+            return value == null ? String.Empty : value.ToString().Trim();
+        }
+
+        private static string NormalizeHex(string text)
+        {
+            string value = text == null ? String.Empty : text.Trim();
+            if (value.StartsWith("0x", StringComparison.OrdinalIgnoreCase))
+            {
+                value = value.Substring(2);
+            }
+            return value;
+        }
+
+        private static byte ParseDecimalByte(string text, string fieldName)
+        {
+            byte value;
+            if (!Byte.TryParse(text, NumberStyles.Integer,
+                CultureInfo.InvariantCulture, out value))
+            {
+                throw InvalidValue(fieldName, "decimal byte (0 to 255)");
+            }
+            return value;
+        }
+
+        private static short ParseDecimalInt16(string text, string fieldName)
+        {
+            short value;
+            if (!Int16.TryParse(text, NumberStyles.Integer,
+                CultureInfo.InvariantCulture, out value))
+            {
+                throw InvalidValue(fieldName, "decimal signed 16-bit value");
+            }
+            return value;
+        }
+
+        private static ushort ParseDecimalUInt16(string text, string fieldName)
+        {
+            ushort value;
+            if (!UInt16.TryParse(text, NumberStyles.Integer,
+                CultureInfo.InvariantCulture, out value))
+            {
+                throw InvalidValue(fieldName, "decimal value from 0 to 65535");
+            }
+            return value;
+        }
+
+        private static byte ParseHexByte(string text, string fieldName)
+        {
+            byte value;
+            if (!Byte.TryParse(NormalizeHex(text), NumberStyles.HexNumber,
+                CultureInfo.InvariantCulture, out value))
+            {
+                throw InvalidValue(fieldName, "hex byte (00 to FF)");
+            }
+            return value;
+        }
+
+        private static ushort ParseHexUInt16(string text, string fieldName)
+        {
+            ushort value;
+            if (!UInt16.TryParse(NormalizeHex(text), NumberStyles.HexNumber,
+                CultureInfo.InvariantCulture, out value))
+            {
+                throw InvalidValue(fieldName, "hex 16-bit value (0000 to FFFF)");
+            }
+            return value;
+        }
+
+        private static uint ParseHexUInt32(string text, string fieldName)
+        {
+            uint value;
+            if (!UInt32.TryParse(NormalizeHex(text), NumberStyles.HexNumber,
+                CultureInfo.InvariantCulture, out value))
+            {
+                throw InvalidValue(
+                    fieldName, "hex 32-bit value (00000000 to FFFFFFFF)");
+            }
+            return value;
+        }
+
+        private static FormatException InvalidValue(
+            string fieldName, string expectedFormat)
+        {
+            return new FormatException(
+                String.Format("{0} must be a {1}.", fieldName, expectedFormat));
+        }
+
+        private void ValidateCell(
+            DataGridView grid,
+            DataGridViewCellValidatingEventArgs e,
+            IntroCellValueType valueType)
+        {
+            string fieldName = grid.Columns[e.ColumnIndex].HeaderText;
+            string value = e.FormattedValue == null
+                ? String.Empty
+                : e.FormattedValue.ToString();
+
+            try
+            {
+                switch (valueType)
+                {
+                    case IntroCellValueType.DecimalByte:
+                        ParseDecimalByte(value, fieldName);
+                        break;
+                    case IntroCellValueType.DecimalInt16:
+                        ParseDecimalInt16(value, fieldName);
+                        break;
+                    case IntroCellValueType.DecimalUInt16:
+                        ParseDecimalUInt16(value, fieldName);
+                        break;
+                    case IntroCellValueType.HexByte:
+                        ParseHexByte(value, fieldName);
+                        break;
+                    case IntroCellValueType.HexUInt16:
+                        ParseHexUInt16(value, fieldName);
+                        break;
+                    case IntroCellValueType.HexUInt32:
+                        ParseHexUInt32(value, fieldName);
+                        break;
+                }
+
+                grid.Rows[e.RowIndex].ErrorText = String.Empty;
+            }
+            catch (FormatException ex)
+            {
+                grid.Rows[e.RowIndex].ErrorText = ex.Message;
+                e.Cancel = true;
+            }
+        }
+
+        private void buttonOK_Click(object sender, EventArgs e)
+        {
+            dgvAnimations.EndEdit();
+            dgvImages.EndEdit();
+            dgvSequence.EndEdit();
+
+            string errorMessage;
+            if (!TryReadEditorRows(out errorMessage))
+            {
+                Program.ErrorMessageBox(errorMessage);
+                return;
+            }
+
+            if (!TrySaveIntroData(out errorMessage))
+            {
+                Program.ErrorMessageBox(
+                    "The intro changes could not be saved.\n\n" + errorMessage);
+                return;
+            }
+
+            AnyChangesSubmitted = true;
+            DialogResult = DialogResult.OK;
+            Close();
+        }
+
 
 		private void buttonCancel_Click(object sender, EventArgs e)
 		{
@@ -324,20 +791,75 @@ namespace VPWStudio
 			Close();
 		}
 
-		private void dgvAnimations_CellValidating(object sender, DataGridViewCellValidatingEventArgs e)
-		{
+        private void dgvAnimations_CellValidating(object sender, DataGridViewCellValidatingEventArgs e)
+        {
+            IntroCellValueType valueType;
 
-		}
+            if (e.ColumnIndex == 0 || e.ColumnIndex == 2)
+            {
+                valueType = IntroCellValueType.HexUInt16;
+            }
+            else if (e.ColumnIndex >= 8)
+            {
+                valueType = IntroCellValueType.HexByte;
+            }
+            else
+            {
+                valueType = IntroCellValueType.DecimalInt16;
+            }
 
-		private void dgvImages_CellValidating(object sender, DataGridViewCellValidatingEventArgs e)
-		{
+            ValidateCell(dgvAnimations, e, valueType);
+        }
 
-		}
+        private void dgvImages_CellValidating(object sender, DataGridViewCellValidatingEventArgs e)
+        {
+            IntroCellValueType valueType;
 
-		private void dgvSequence_CellValidating(object sender, DataGridViewCellValidatingEventArgs e)
-		{
+            if (e.ColumnIndex == 0 ||
+                e.ColumnIndex == 5 ||
+                e.ColumnIndex == 7)
+            {
+                valueType = IntroCellValueType.HexUInt16;
+            }
+            else if (e.ColumnIndex == 6)
+            {
+                valueType = IntroCellValueType.DecimalInt16;
+            }
+            else
+            {
+                valueType = IntroCellValueType.DecimalUInt16;
+            }
 
-		}
+            ValidateCell(dgvImages, e, valueType);
+        }
+
+        private void dgvSequence_CellValidating(object sender, DataGridViewCellValidatingEventArgs e)
+        {
+            IntroCellValueType valueType;
+
+            if (e.ColumnIndex <= 1)
+            {
+                valueType = IntroCellValueType.DecimalByte;
+            }
+            else if (e.ColumnIndex <= 3)
+            {
+                valueType = IntroCellValueType.HexByte;
+            }
+            else if (e.ColumnIndex == 4)
+            {
+                valueType = IntroCellValueType.DecimalUInt16;
+            }
+            else if (e.ColumnIndex <= 7)
+            {
+                valueType = IntroCellValueType.HexUInt16;
+            }
+            else
+            {
+                valueType = IntroCellValueType.HexUInt32;
+            }
+
+            ValidateCell(dgvSequence, e, valueType);
+        }
 
 		private void btnReloadRom_Click(object sender, EventArgs e)
 		{
@@ -420,7 +942,7 @@ namespace VPWStudio
 					offset += 12 + ((dgvSequence.SelectedCells[0].ColumnIndex - 8) * 4);
 				}
 
-				tsslblCurAddressSeq.Text = String.Format("Seq. ROM Address: 0x{0:X})", SeqStartLocation+offset);
+				tsslblCurAddressSeq.Text = String.Format("Seq. ROM Address: 0x{0:X}", SeqStartLocation+offset);
 			}
 		}
 
