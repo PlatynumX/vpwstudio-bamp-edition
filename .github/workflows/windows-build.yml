@@ -1,0 +1,97 @@
+name: Windows Build
+
+on:
+  push:
+    branches:
+      - main
+      - feature/intro-editor
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: windows-build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build VPWStudio
+    runs-on: windows-2022
+    timeout-minutes: 25
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Add MSBuild to PATH
+        uses: microsoft/setup-msbuild@v3
+
+      - name: Build Release configuration
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+
+          msbuild .\VPWStudio\VPWStudio.sln `
+            /m `
+            /t:Rebuild `
+            /p:Configuration=Release `
+            '/p:Platform=Any CPU' `
+            /p:RunCodeAnalysis=false `
+            /v:minimal `
+            /bl:VPWStudio\build.binlog
+
+      - name: Verify Windows build
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+
+          $outputDirectory = Join-Path $env:GITHUB_WORKSPACE "VPWStudio\VPWStudio\bin\Release"
+          $executable = Join-Path $outputDirectory "VPWStudio.exe"
+
+          if (-not (Test-Path -LiteralPath $executable)) {
+            throw "VPWStudio.exe was not produced at $executable"
+          }
+
+          Get-ChildItem -LiteralPath $outputDirectory -Recurse |
+            Select-Object FullName, Length
+
+      - name: Package Windows build
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+
+          $outputDirectory = Join-Path $env:GITHUB_WORKSPACE "VPWStudio\VPWStudio\bin\Release"
+          $artifactDirectory = Join-Path $env:GITHUB_WORKSPACE "artifact"
+          $zipPath = Join-Path $artifactDirectory "VPWStudio-BAMP-Edition-Windows.zip"
+
+          New-Item -ItemType Directory -Path $artifactDirectory -Force | Out-Null
+          Compress-Archive -Path "$outputDirectory\*" -DestinationPath $zipPath -Force
+
+          if (-not (Test-Path -LiteralPath $zipPath)) {
+            throw "The Windows build ZIP was not created."
+          }
+
+      - name: Upload Windows build
+        uses: actions/upload-artifact@v7
+        with:
+          name: VPWStudio-BAMP-Windows
+          path: artifact/VPWStudio-BAMP-Edition-Windows.zip
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Upload build diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: VPWStudio-BAMP-Build-Diagnostics
+          path: |
+            VPWStudio/build.binlog
+            VPWStudio/VPWStudio/bin/Release/**
+          if-no-files-found: warn
+          retention-days: 30
