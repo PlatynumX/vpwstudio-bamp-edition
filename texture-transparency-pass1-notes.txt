@@ -1,0 +1,13 @@
+VPWStudio texture transparency pass 1 applied.
+
+What this patch changes:
+- Fixes CI4/CI8 internal pixel handling so imported texture data is stored as one pixel index per byte internally.
+- Fixes CI4/AkiTexture CI4 write paths so pixels are repacked correctly when saved back out.
+- Fixes CI8/AkiTexture CI8 write paths so stride padding bytes are not written.
+- Adds bitmap import support for ordinary PNGs/ARGB bitmaps instead of requiring already-indexed source images.
+- Preserves transparency during PNG -> texture conversion using 1-bit alpha semantics suitable for N64 RGBA5551.
+- Keeps transparent pixels transparent when exporting texture -> PNG.
+
+Recommended next step:
+- Build and test a few known transparent textures in both directions.
+- If this passes, we can do a pass 2 to wire any remaining UI/editor import points more explicitly and add palette-aware CI preview/export improvements.
