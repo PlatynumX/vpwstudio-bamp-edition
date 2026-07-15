@@ -4,6 +4,8 @@ using System.Drawing;
 using System.IO;
 using System.Windows.Forms;
 
+using VPWStudio.GameSpecific;
+
 namespace VPWStudio
 {
     public partial class GameIntroEditor_Later
