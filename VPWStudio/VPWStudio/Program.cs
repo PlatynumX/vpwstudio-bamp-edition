@@ -1038,6 +1038,25 @@ namespace VPWStudio
                 introFile.SequenceData,
                 "sequence");
 
+            if (introFile.CameraTableData.Length > 0)
+            {
+                ApplyIntroDataSection(
+                    outRomData,
+                    introFile.CameraOffset,
+                    introFile.CameraTableData,
+                    "camera table");
+
+                foreach (GameIntroDataChunk chunk
+                    in introFile.CameraDataChunks)
+                {
+                    ApplyIntroDataSection(
+                        outRomData,
+                        chunk.Offset,
+                        chunk.Data,
+                        "camera data");
+                }
+            }
+
             BuildLogPub.AddLine(
                 String.Format(
                     "Applied intro tables: {0} animations, {1} images, {2} sequence entries.",

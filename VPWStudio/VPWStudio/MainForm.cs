@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Data;
@@ -1152,7 +1152,7 @@ namespace VPWStudio
 		/// * WCW vs. nWo World Tour
 		/// * Virtual Pro-Wrestling 64
 		/// * WCW/nWo Revenge
-		/// 
+		///
 		/// In WM2K and VPW2, it allows you to edit the possible belt choices.
 		/// In No Mercy, it allows you to edit the belts themselves.
 		private void championshipsToolStripMenuItem_Click(object sender, EventArgs e)
@@ -1261,7 +1261,7 @@ namespace VPWStudio
 					{
 						Program.ErrorMessageBox("VPW2 costumes dialog is not complete");
 					}
-					
+
 					break;
 
 				default:
@@ -3114,7 +3114,7 @@ namespace VPWStudio
 					return;
 			}
 
-			
+
 		}
 
 		private void stringRenderTestToolStripMenuItem_Click(object sender, EventArgs e)
@@ -3171,6 +3171,6 @@ namespace VPWStudio
 			smt.ShowDialog();
 		}
 
-		
+
 	}
 }

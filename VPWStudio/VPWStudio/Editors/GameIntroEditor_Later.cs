@@ -71,13 +71,16 @@ namespace VPWStudio
 			IntroSequenceItems = new List<IntroSequence_Later>();
 			CameraMotionDefs = new List<CameraDef>();
 			StrBuilder = new StringBuilder();
+            InitializeBampEditor();
 
 			LoadIntroData();
 		}
 
-		private void LoadIntroData()
+		private void LoadIntroData(bool loadSavedData = true)
 		{
-			Program.ReloadBaseRom();
+
+            ResetBampEditorUiBeforeLoad();
+Program.ReloadBaseRom();
 			MemoryStream ms = new MemoryStream(Program.CurrentInputROM.Data);
 			BinaryReader br = new BinaryReader(ms);
 
@@ -216,12 +219,13 @@ namespace VPWStudio
 					cbCameraMotionList.Items.Add(string.Format("Entry {0}",i));
 				}
             }
+            CaptureBampBaseCapacities();
 
 
 			br.Close();
 
 			// BAMP_INTRO_EDITOR_PERSISTENCE
-			if (TryLoadSavedIntroData())
+			if (loadSavedData && TryLoadSavedIntroData())
 			{
 			    hasAnimLocation = IntroAnimations.Count > 0;
 			    hasImageLocation = IntroImages.Count > 0;
@@ -229,6 +233,7 @@ namespace VPWStudio
 			}
 
 			PopulateRows(hasAnimLocation, hasImageLocation, hasSeqLocation);
+            PrepareBampEditorAfterLoad();
 		}
 
 		private void PopulateRows(bool _anim, bool _img, bool _seq)
@@ -375,6 +380,7 @@ namespace VPWStudio
                     }
                 }
 
+                LoadSavedCameraData(introFile);
                 return true;
             }
             catch (Exception ex)
@@ -501,6 +507,15 @@ namespace VPWStudio
                 }
             }
 
+            if (!TryReadBampEditorData(
+                animations,
+                images,
+                sequence,
+                out errorMessage))
+            {
+                return false;
+            }
+
             IntroAnimations.Clear();
             IntroAnimations.AddRange(animations);
             IntroImages.Clear();
@@ -558,6 +573,7 @@ namespace VPWStudio
                 introFile.AnimationData = BuildAnimationData();
                 introFile.ImageData = BuildImageData();
                 introFile.SequenceData = BuildSequenceData();
+                PopulateCameraFileData(introFile);
 
                 using (FileStream stream = new FileStream(
                     absolutePath, FileMode.Create, FileAccess.Write, FileShare.None))
@@ -793,7 +809,9 @@ namespace VPWStudio
 
         private void dgvAnimations_CellValidating(object sender, DataGridViewCellValidatingEventArgs e)
         {
-            IntroCellValueType valueType;
+
+            if (e.ColumnIndex >= 12) { return; }
+IntroCellValueType valueType;
 
             if (e.ColumnIndex == 0 || e.ColumnIndex == 2)
             {
@@ -813,7 +831,9 @@ namespace VPWStudio
 
         private void dgvImages_CellValidating(object sender, DataGridViewCellValidatingEventArgs e)
         {
-            IntroCellValueType valueType;
+
+            if (e.ColumnIndex >= 8) { return; }
+IntroCellValueType valueType;
 
             if (e.ColumnIndex == 0 ||
                 e.ColumnIndex == 5 ||
@@ -835,7 +855,9 @@ namespace VPWStudio
 
         private void dgvSequence_CellValidating(object sender, DataGridViewCellValidatingEventArgs e)
         {
-            IntroCellValueType valueType;
+
+            if (e.ColumnIndex >= 12) { return; }
+IntroCellValueType valueType;
 
             if (e.ColumnIndex <= 1)
             {
@@ -862,16 +884,9 @@ namespace VPWStudio
         }
 
 		private void btnReloadRom_Click(object sender, EventArgs e)
-		{
-			IntroAnimations.Clear();
-			IntroImages.Clear();
-			IntroSequenceItems.Clear();
-
-			dgvAnimations.Rows.Clear();
-			dgvImages.Rows.Clear();
-			dgvSequence.Rows.Clear();
-			LoadIntroData();
-		}
+        {
+            LoadIntroData(false);
+        }
 
 		// todo: properly calculate the offsets
 
@@ -948,62 +963,7 @@ namespace VPWStudio
 
         private void cbCameraMotionList_SelectedIndexChanged(object sender, EventArgs e)
         {
-			if (cbCameraMotionList.SelectedIndex < 0)
-			{
-				return;
-			}
-
-			int index = cbCameraMotionList.SelectedIndex;
-			StrBuilder.Clear();
-			StrBuilder.AppendLine(string.Format("Camera Motion Entry #{0} (Z64 ROM addr 0x{1:X})", index, CameraMotionStartLocation + (8*index)));
-
-			StrBuilder.AppendLine(string.Format("Data Pointer: 0x{0:X} (Z64 ROM addr 0x{1:X})", CameraMotionDefs[index].DataPointer, Program.PointerToRomAddr(CameraMotionDefs[index].DataPointer, 1)));
-            StrBuilder.AppendLine(string.Format("Unknown Value: 0x{0:X4}", CameraMotionDefs[index].UnknownValue));
-            StrBuilder.AppendLine(string.Format("Camera Motion ID: 0x{0:X4}", CameraMotionDefs[index].ID));
-            StrBuilder.AppendLine();
-
-            StrBuilder.AppendLine(string.Format("X Values Pointer: 0x{0:X} (Z64 ROM addr 0x{1:X})", CameraMotionDefs[index].ValuePointerX, Program.PointerToRomAddr(CameraMotionDefs[index].ValuePointerX, 1)));
-			foreach (CameraValuePair cvp in CameraMotionDefs[index].X)
-			{
-				StrBuilder.AppendLine(string.Format("value 0x{0:X2} ({0}) at frame 0x{1:X2} ({1})", cvp.Value, cvp.FrameNumber));
-			}
-            StrBuilder.AppendLine();
-
-            StrBuilder.AppendLine(string.Format("Y Values Pointer: 0x{0:X} (Z64 ROM addr 0x{1:X})", CameraMotionDefs[index].ValuePointerY, Program.PointerToRomAddr(CameraMotionDefs[index].ValuePointerY, 1)));
-            foreach (CameraValuePair cvp in CameraMotionDefs[index].Y)
-            {
-                StrBuilder.AppendLine(string.Format("value 0x{0:X2} ({0}) at frame 0x{1:X2} ({1})", cvp.Value, cvp.FrameNumber));
-            }
-            StrBuilder.AppendLine();
-
-            StrBuilder.AppendLine(string.Format("Z Values Pointer: 0x{0:X} (Z64 ROM addr 0x{1:X})", CameraMotionDefs[index].ValuePointerZ, Program.PointerToRomAddr(CameraMotionDefs[index].ValuePointerZ, 1)));
-            foreach (CameraValuePair cvp in CameraMotionDefs[index].Z)
-            {
-                StrBuilder.AppendLine(string.Format("value 0x{0:X2} ({0}) at frame 0x{1:X2} ({1})", cvp.Value, cvp.FrameNumber));
-            }
-            StrBuilder.AppendLine();
-
-            StrBuilder.AppendLine(string.Format("Pitch Values Pointer: 0x{0:X} (Z64 ROM addr 0x{1:X})", CameraMotionDefs[index].ValuePointerPitch, Program.PointerToRomAddr(CameraMotionDefs[index].ValuePointerPitch, 1)));
-            foreach (CameraValuePair cvp in CameraMotionDefs[index].Pitch)
-            {
-                StrBuilder.AppendLine(string.Format("value 0x{0:X2} ({0}) at frame 0x{1:X2} ({1})", cvp.Value, cvp.FrameNumber));
-            }
-            StrBuilder.AppendLine();
-
-            StrBuilder.AppendLine(string.Format("Pan Values Pointer: 0x{0:X} (Z64 ROM addr 0x{1:X})", CameraMotionDefs[index].ValuePointerPan, Program.PointerToRomAddr(CameraMotionDefs[index].ValuePointerPan, 1)));
-            foreach (CameraValuePair cvp in CameraMotionDefs[index].Pan)
-            {
-                StrBuilder.AppendLine(string.Format("value 0x{0:X2} ({0}) at frame 0x{1:X2} ({1})", cvp.Value, cvp.FrameNumber));
-            }
-            StrBuilder.AppendLine();
-
-            StrBuilder.AppendLine(string.Format("Roll Values Pointer: 0x{0:X} (Z64 ROM addr 0x{1:X})", CameraMotionDefs[index].ValuePointerRoll, Program.PointerToRomAddr(CameraMotionDefs[index].ValuePointerRoll, 1)));
-            foreach (CameraValuePair cvp in CameraMotionDefs[index].Roll)
-            {
-                StrBuilder.AppendLine(string.Format("value 0x{0:X2} ({0}) at frame 0x{1:X2} ({1})", cvp.Value, cvp.FrameNumber));
-            }
-
-            tbCameraMotion.Text = StrBuilder.ToString();
+            BampCameraEntryChanged();
         }
     }
 }

@@ -179,6 +179,9 @@
     <Compile Include="Editors\GameIntroEditor_Later.cs">
       <SubType>Form</SubType>
     </Compile>
+    <Compile Include="Editors\GameIntroEditor_BAMP.cs">
+      <DependentUpon>GameIntroEditor_Later.cs</DependentUpon>
+    </Compile>
     <Compile Include="Editors\GameIntroEditor_Later.Designer.cs">
       <DependentUpon>GameIntroEditor_Later.cs</DependentUpon>
     </Compile>
