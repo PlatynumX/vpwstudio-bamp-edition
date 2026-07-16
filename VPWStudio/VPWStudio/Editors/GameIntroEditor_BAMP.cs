@@ -2819,18 +2819,18 @@ namespace VPWStudio
                 return;
             }
 
-            ushort wrestler;
-            ushort start;
-            ushort animation;
-            ushort end;
-            ushort xRaw;
-            ushort yRaw;
-            ushort zRaw;
-            ushort rotation;
-            byte animationFlags;
-            byte moveFlags;
-            byte extraFlags;
-            byte costume;
+            ushort wrestler = 0;
+            ushort start = 0;
+            ushort animation = 0;
+            ushort end = 0;
+            ushort xRaw = 0;
+            ushort yRaw = 0;
+            ushort zRaw = 0;
+            ushort rotation = 0;
+            byte animationFlags = 0;
+            byte moveFlags = 0;
+            byte extraFlags = 0;
+            byte costume = 0;
 
             bool valid =
                 TryParseHexUInt16Cell(row.Cells[0], out wrestler) &&
