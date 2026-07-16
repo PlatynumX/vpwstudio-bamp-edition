@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Data;
@@ -1152,7 +1152,7 @@ namespace VPWStudio
 		/// * WCW vs. nWo World Tour
 		/// * Virtual Pro-Wrestling 64
 		/// * WCW/nWo Revenge
-		/// 
+		///
 		/// In WM2K and VPW2, it allows you to edit the possible belt choices.
 		/// In No Mercy, it allows you to edit the belts themselves.
 		private void championshipsToolStripMenuItem_Click(object sender, EventArgs e)
@@ -1261,7 +1261,7 @@ namespace VPWStudio
 					{
 						Program.ErrorMessageBox("VPW2 costumes dialog is not complete");
 					}
-					
+
 					break;
 
 				default:
@@ -2328,166 +2328,264 @@ namespace VPWStudio
 		#region Graphics Conversion
 		// PNG to TEX
 		private void pngTestToolStripMenuItem_Click(object sender, EventArgs e)
-		{
-			OpenFileDialog ofd = new OpenFileDialog();
-			ofd.Title = "Convert PNG to TEX";
-			ofd.Filter = "PNG files (*.png)|*.png|All Files (*.*)|*.*";
-			if (ofd.ShowDialog() == DialogResult.OK)
-			{
-				Bitmap b = new Bitmap(ofd.FileName);
-				if (b.PixelFormat == PixelFormat.Format8bppIndexed ||
-					b.PixelFormat == PixelFormat.Format4bppIndexed)
-				{
-					AkiTexture test = new AkiTexture();
-					if (test.FromBitmap(b))
-					{
-						using (FileStream fs = new FileStream(String.Format("{0}.tex", Path.GetFileNameWithoutExtension(ofd.FileName)), FileMode.Create))
-						{
-							using (BinaryWriter bw = new BinaryWriter(fs))
-							{
-								test.WriteData(bw);
-								bw.Close();
-								fs.Close();
-								Program.InfoMessageBox(String.Format("Converted file written to {0}", Path.GetFullPath(fs.Name)));
-							}
-						}
-					}
-				}
-				else if (b.PixelFormat == PixelFormat.Format32bppArgb)
-				{
-					// todo: this doesn't always imply transparency
-					Program.WarningMessageBox("Images with transparency are not properly handled at the moment.");
+        {
+            OpenFileDialog ofd = new OpenFileDialog();
+            ofd.Title = "Convert PNG to TEX";
+            ofd.Filter = "PNG files (*.png)|*.png|All Files (*.*)|*.*";
 
-					// dealing with a transparent image, which is possibly paletted.
-					HashSet<Color> usedColors = new HashSet<Color>();
-					UInt16 alphaColor = 0;
-					// todo: use LockBits/UnlockBits
-					for (int y = 0; y < b.Height; y++)
-					{
-						for (int x = 0; x < b.Width; x++)
-						{
-							Color c = b.GetPixel(x, y);
-							if (c.A == 0)
-							{
-								alphaColor = N64Colors.ColorToValue5551(c);
-							}
+            if (ofd.ShowDialog() != DialogResult.OK)
+            {
+                return;
+            }
 
-							if (usedColors.Contains(c))
-								continue;
+            using (Bitmap bitmap = new Bitmap(ofd.FileName))
+            {
+                AkiTexture texture = new AkiTexture();
 
-							usedColors.Add(c);
-						}
-					}
+                if (!texture.FromBitmap(bitmap))
+                {
+                    Program.ErrorMessageBox(
+                        "Unable to convert this PNG to an AKI texture.");
+                    return;
+                }
 
-					AkiTexture test = new AkiTexture();
-					Bitmap converted;
-					// xxx: this conversion sucks (specifically, the way the number of colors is checked)
-					if (usedColors.Count <= 16)
-					{
-						// ci4
-						converted = b.Clone(new Rectangle(0, 0, b.Width, b.Height), PixelFormat.Format4bppIndexed);
-					}
-					else
-					{
-						// assume ci8
-						converted = b.Clone(new Rectangle(0, 0, b.Width, b.Height), PixelFormat.Format8bppIndexed);
-					}
-					test.FromBitmap(converted);
+                SaveFileDialog sfd = new SaveFileDialog();
+                sfd.Title = "Save AKI Texture";
+                sfd.Filter =
+                    "AKI Texture (*.tex)|*.tex|All Files (*.*)|*.*";
+                sfd.FileName =
+                    Path.GetFileNameWithoutExtension(ofd.FileName) +
+                    ".tex";
 
-					// find the alpha color and kill its alpha bit
-					for (int i = 0; i < test.Palette.Length; i++)
-					{
-						UInt16 thisColor = test.Palette[i];
-						if ((thisColor & 0xFFFE) == alphaColor)
-						{
-							test.Palette[i] &= 0xFFFE;
-						}
-					}
+                if (sfd.ShowDialog() != DialogResult.OK)
+                {
+                    return;
+                }
 
-					FileStream fs = new FileStream("test.tex", FileMode.Create);
-					BinaryWriter bw = new BinaryWriter(fs);
-					test.WriteData(bw);
-					bw.Close();
-					fs.Close();
-				}
-				else
-				{
-					Program.ErrorMessageBox(String.Format("Input image has unsupported PixelFormat {0}", b.PixelFormat));
-				}
-				b.Dispose();
-			}
-		}
+                using (FileStream stream =
+                    new FileStream(sfd.FileName, FileMode.Create))
+                using (BinaryWriter writer =
+                    new BinaryWriter(stream))
+                {
+                    texture.WriteData(writer);
+                }
+
+                int transparentIndex =
+                    TextureConversionHelper.FindTransparentIndex(
+                        texture.Palette);
+
+                Program.InfoMessageBox(
+                    String.Format(
+                        "Converted {0}x{1} PNG to {2} TEX.\n" +
+                        "Palette colors: {3}\n" +
+                        "Transparent index: {4}\n\n" +
+                        "Written to:\n{5}",
+                        texture.Width,
+                        texture.Height,
+                        texture.ImageFormat,
+                        texture.PaletteNumColors,
+                        transparentIndex >= 0
+                            ? transparentIndex.ToString()
+                            : "none",
+                        sfd.FileName));
+            }
+        }
 
 		private void pngToCi4ToolStripMenuItem_Click(object sender, EventArgs e)
-		{
-			OpenFileDialog ofd = new OpenFileDialog();
-			ofd.Title = "Convert PNG to CI4";
-			ofd.Filter = "PNG files (*.png)|*.png|All Files (*.*)|*.*";
-			if (ofd.ShowDialog() == DialogResult.OK)
-			{
-				Bitmap b = new Bitmap(ofd.FileName);
-				if (b.PixelFormat == PixelFormat.Format4bppIndexed)
-				{
-					Ci4Texture test = new Ci4Texture();
-					test.FromBitmap(b);
-					using (FileStream fs = new FileStream(String.Format("{0}.ci4tex", Path.GetFileNameWithoutExtension(ofd.FileName)), FileMode.Create))
-					{
-						using (BinaryWriter bw = new BinaryWriter(fs))
-						{
-							test.WriteData(bw);
-							bw.Flush();
-							Program.InfoMessageBox(String.Format("Converted file written to {0}", Path.GetFullPath(fs.Name)));
-						}
-					}
-				}
-				else if (b.PixelFormat == PixelFormat.Format8bppIndexed)
-				{
-					// in theory, this can be converted, but the results will probably not be good
-					// UNLESS the input image only uses the first 16 palette indices.
-					Program.ErrorMessageBox("Input image is 256 colors/PixelFormat.Format8bppIndexed, expected 16 colors/PixelFormat.Format4bppIndexed");
-				}
-				else
-				{
-					Program.ErrorMessageBox(String.Format("Can not convert input image of PixelFormat {0} to CI4/PixelFormat.Format4bppIndexed", b.PixelFormat));
-				}
-				b.Dispose();
-			}
-		}
+        {
+            OpenFileDialog ofd = new OpenFileDialog();
+            ofd.Title = "Convert PNG to CI4";
+            ofd.Filter = "PNG files (*.png)|*.png|All Files (*.*)|*.*";
+
+            if (ofd.ShowDialog() != DialogResult.OK)
+            {
+                return;
+            }
+
+            using (Bitmap bitmap = new Bitmap(ofd.FileName))
+            {
+                Color[] paletteColors;
+                byte[] indices;
+
+                if (!TextureConversionHelper.TryConvertBitmapToIndexed(
+                    bitmap,
+                    16,
+                    -1,
+                    out paletteColors,
+                    out indices))
+                {
+                    Program.ErrorMessageBox(
+                        "Unable to quantize this PNG to CI4.");
+                    return;
+                }
+
+                Ci4Texture texture = new Ci4Texture();
+                if (!texture.FromBitmap(bitmap))
+                {
+                    Program.ErrorMessageBox(
+                        "Unable to convert this PNG to CI4.");
+                    return;
+                }
+
+                Ci4Palette palette = new Ci4Palette();
+                for (int i = 0; i < 16; i++)
+                {
+                    palette.Entries[i] =
+                        N64Colors.ColorToValue5551(
+                            paletteColors[i]);
+                }
+
+                SaveFileDialog sfd = new SaveFileDialog();
+                sfd.Title = "Save CI4 Texture";
+                sfd.Filter =
+                    "CI4 Texture (*.ci4tex)|*.ci4tex|" +
+                    "All Files (*.*)|*.*";
+                sfd.FileName =
+                    Path.GetFileNameWithoutExtension(ofd.FileName) +
+                    ".ci4tex";
+
+                if (sfd.ShowDialog() != DialogResult.OK)
+                {
+                    return;
+                }
+
+                string palettePath =
+                    Path.ChangeExtension(
+                        sfd.FileName,
+                        ".ci4pal");
+
+                using (FileStream stream =
+                    new FileStream(sfd.FileName, FileMode.Create))
+                using (BinaryWriter writer =
+                    new BinaryWriter(stream))
+                {
+                    texture.WriteData(writer);
+                }
+
+                using (FileStream stream =
+                    new FileStream(palettePath, FileMode.Create))
+                using (BinaryWriter writer =
+                    new BinaryWriter(stream))
+                {
+                    palette.WriteData(writer);
+                }
+
+                int transparentIndex =
+                    TextureConversionHelper.FindTransparentIndex(
+                        palette.Entries);
+
+                Program.InfoMessageBox(
+                    String.Format(
+                        "Converted {0}x{1} PNG to CI4.\n" +
+                        "Transparent index: {2}\n\n" +
+                        "Texture:\n{3}\n\nPalette:\n{4}",
+                        texture.Width,
+                        texture.Height,
+                        transparentIndex >= 0
+                            ? transparentIndex.ToString()
+                            : "none",
+                        sfd.FileName,
+                        palettePath));
+            }
+        }
 
 		private void pngToCi8ToolStripMenuItem_Click(object sender, EventArgs e)
-		{
-			OpenFileDialog ofd = new OpenFileDialog();
-			ofd.Title = "Convert PNG to CI8";
-			ofd.Filter = "PNG files (*.png)|*.png|All Files (*.*)|*.*";
-			if (ofd.ShowDialog() == DialogResult.OK)
-			{
-				Bitmap b = new Bitmap(ofd.FileName);
-				if (b.PixelFormat == PixelFormat.Format8bppIndexed)
-				{
-					Ci8Texture test = new Ci8Texture();
-					test.FromBitmap(b);
-					using (FileStream fs = new FileStream(String.Format("{0}.ci8tex", Path.GetFileNameWithoutExtension(ofd.FileName)), FileMode.Create))
-					{
-						using (BinaryWriter bw = new BinaryWriter(fs))
-						{
-							test.WriteData(bw);
-							bw.Flush();
-							Program.InfoMessageBox(String.Format("Converted file written to {0}", Path.GetFullPath(fs.Name)));
-						}
-					}
-				}
-				else if (b.PixelFormat == PixelFormat.Format4bppIndexed)
-				{
-					// in theory, this can be converted, but I have to write the code for it.
-					Program.ErrorMessageBox("Input image is 16 colors/PixelFormat.Format4bppIndexed, expected 256 colors/PixelFormat.Format8bppIndexed");
-				}
-				else
-				{
-					Program.ErrorMessageBox(String.Format("Can not convert input image of PixelFormat {0} to CI8/PixelFormat.Format8bppIndexed", b.PixelFormat));
-				}
-				b.Dispose();
-			}
-		}
+        {
+            OpenFileDialog ofd = new OpenFileDialog();
+            ofd.Title = "Convert PNG to CI8";
+            ofd.Filter = "PNG files (*.png)|*.png|All Files (*.*)|*.*";
+
+            if (ofd.ShowDialog() != DialogResult.OK)
+            {
+                return;
+            }
+
+            using (Bitmap bitmap = new Bitmap(ofd.FileName))
+            {
+                Color[] paletteColors;
+                byte[] indices;
+
+                if (!TextureConversionHelper.TryConvertBitmapToIndexed(
+                    bitmap,
+                    256,
+                    -1,
+                    out paletteColors,
+                    out indices))
+                {
+                    Program.ErrorMessageBox(
+                        "Unable to quantize this PNG to CI8.");
+                    return;
+                }
+
+                Ci8Texture texture = new Ci8Texture();
+                if (!texture.FromBitmap(bitmap))
+                {
+                    Program.ErrorMessageBox(
+                        "Unable to convert this PNG to CI8.");
+                    return;
+                }
+
+                Ci8Palette palette = new Ci8Palette();
+                for (int i = 0; i < 256; i++)
+                {
+                    palette.Entries[i] =
+                        N64Colors.ColorToValue5551(
+                            paletteColors[i]);
+                }
+
+                SaveFileDialog sfd = new SaveFileDialog();
+                sfd.Title = "Save CI8 Texture";
+                sfd.Filter =
+                    "CI8 Texture (*.ci8tex)|*.ci8tex|" +
+                    "All Files (*.*)|*.*";
+                sfd.FileName =
+                    Path.GetFileNameWithoutExtension(ofd.FileName) +
+                    ".ci8tex";
+
+                if (sfd.ShowDialog() != DialogResult.OK)
+                {
+                    return;
+                }
+
+                string palettePath =
+                    Path.ChangeExtension(
+                        sfd.FileName,
+                        ".ci8pal");
+
+                using (FileStream stream =
+                    new FileStream(sfd.FileName, FileMode.Create))
+                using (BinaryWriter writer =
+                    new BinaryWriter(stream))
+                {
+                    texture.WriteData(writer);
+                }
+
+                using (FileStream stream =
+                    new FileStream(palettePath, FileMode.Create))
+                using (BinaryWriter writer =
+                    new BinaryWriter(stream))
+                {
+                    palette.WriteData(writer);
+                }
+
+                int transparentIndex =
+                    TextureConversionHelper.FindTransparentIndex(
+                        palette.Entries);
+
+                Program.InfoMessageBox(
+                    String.Format(
+                        "Converted {0}x{1} PNG to CI8.\n" +
+                        "Transparent index: {2}\n\n" +
+                        "Texture:\n{3}\n\nPalette:\n{4}",
+                        texture.Width,
+                        texture.Height,
+                        transparentIndex >= 0
+                            ? transparentIndex.ToString()
+                            : "none",
+                        sfd.FileName,
+                        palettePath));
+            }
+        }
 
 		private void pngToMenubgToolStripMenuItem_Click(object sender, EventArgs e)
 		{
@@ -3114,7 +3212,7 @@ namespace VPWStudio
 					return;
 			}
 
-			
+
 		}
 
 		private void stringRenderTestToolStripMenuItem_Click(object sender, EventArgs e)
@@ -3171,6 +3269,6 @@ namespace VPWStudio
 			smt.ShowDialog();
 		}
 
-		
+
 	}
 }

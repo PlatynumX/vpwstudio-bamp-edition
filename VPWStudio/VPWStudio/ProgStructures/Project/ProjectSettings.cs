@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Xml.Serialization;
 
 namespace VPWStudio
@@ -132,7 +132,12 @@ namespace VPWStudio
 		/// </summary>
 		/// Currently unused, and unsure if this will stick around
 		public string WrestlerNameFilePath;
-		#endregion
+
+        /// <summary>
+        /// Path to the project-side game intro definition file.
+        /// </summary>
+        public string GameIntroDefinitionFilePath;
+        #endregion
 
 		/// <summary>
 		/// Default constructor.
@@ -169,6 +174,7 @@ namespace VPWStudio
 			WrestlerDefinitionFilePath = String.Empty;
 			StableDefinitionFilePath = String.Empty;
 			WrestlerNameFilePath = String.Empty;
+            GameIntroDefinitionFilePath = String.Empty;
 			#endregion
 		}
 
@@ -226,6 +232,7 @@ namespace VPWStudio
 			WrestlerDefinitionFilePath = String.Empty;
 			StableDefinitionFilePath = String.Empty;
 			WrestlerNameFilePath = String.Empty;
+            GameIntroDefinitionFilePath = String.Empty;
 			#endregion
 
 		}
@@ -274,6 +281,7 @@ namespace VPWStudio
 			WrestlerDefinitionFilePath = _src.WrestlerDefinitionFilePath;
 			StableDefinitionFilePath = _src.StableDefinitionFilePath;
 			WrestlerNameFilePath = _src.WrestlerNameFilePath;
+            GameIntroDefinitionFilePath = _src.GameIntroDefinitionFilePath;
 		}
 
 		/// <summary>

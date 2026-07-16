@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <Project ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <Import Project="$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props" Condition="Exists('$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props')" />
   <PropertyGroup>
@@ -178,6 +178,9 @@
     </Compile>
     <Compile Include="Editors\GameIntroEditor_Later.cs">
       <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Editors\GameIntroEditor_BAMP.cs">
+      <DependentUpon>GameIntroEditor_Later.cs</DependentUpon>
     </Compile>
     <Compile Include="Editors\GameIntroEditor_Later.Designer.cs">
       <DependentUpon>GameIntroEditor_Later.cs</DependentUpon>
@@ -649,12 +652,6 @@
     <Compile Include="Tools\CodeSegTest.Designer.cs">
       <DependentUpon>CodeSegTest.cs</DependentUpon>
     </Compile>
-    <Compile Include="Tools\ConvertToAkiTexture.cs">
-      <SubType>Form</SubType>
-    </Compile>
-    <Compile Include="Tools\ConvertToAkiTexture.Designer.cs">
-      <DependentUpon>ConvertToAkiTexture.cs</DependentUpon>
-    </Compile>
     <Compile Include="Tools\FaceTester.cs">
       <SubType>Form</SubType>
     </Compile>
@@ -1011,9 +1008,6 @@
     </EmbeddedResource>
     <EmbeddedResource Include="Tools\CodeSegTest.resx">
       <DependentUpon>CodeSegTest.cs</DependentUpon>
-    </EmbeddedResource>
-    <EmbeddedResource Include="Tools\ConvertToAkiTexture.resx">
-      <DependentUpon>ConvertToAkiTexture.cs</DependentUpon>
     </EmbeddedResource>
     <EmbeddedResource Include="Tools\FaceTester.resx">
       <DependentUpon>FaceTester.cs</DependentUpon>

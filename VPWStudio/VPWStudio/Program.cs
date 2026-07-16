@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Reflection;
@@ -661,7 +661,7 @@ namespace VPWStudio
 								}
 							}
 							break;
-						
+
 						// Ci4Background is Ci4Texture with pre-set header values
 						case FileTypes.Ci4Background:
 							{
@@ -884,6 +884,39 @@ namespace VPWStudio
 		/// Builds the Output ROM using the Input ROM as a base, applying changes as necessary.
 		/// </summary>
 		/// a.k.a. the giant fuckoff routine
+        private static void ApplyIntroDataSection(
+            List<byte> outputRom,
+            uint offset,
+            byte[] data,
+            string sectionName)
+        {
+            if (outputRom == null)
+            {
+                throw new ArgumentNullException("outputRom");
+            }
+
+            if (data == null)
+            {
+                throw new InvalidDataException(
+                    String.Format("The intro {0} section is missing.", sectionName));
+            }
+
+            ulong endOffset = (ulong)offset + (ulong)data.Length;
+            if (endOffset > (ulong)outputRom.Count)
+            {
+                throw new InvalidDataException(
+                    String.Format(
+                        "The intro {0} section at 0x{1:X} exceeds the ROM size.",
+                        sectionName,
+                        offset));
+            }
+
+            for (int i = 0; i < data.Length; i++)
+            {
+                outputRom[(int)offset + i] = data[i];
+            }
+        }
+
 		public static void BuildRom()
 		{
 			RomBuildActive = true;
@@ -954,6 +987,86 @@ namespace VPWStudio
 			 * - Weapons
 			 * and anything else not involving the FileTable.
 			 */
+
+        #region Game Intro Definitions
+        // BAMP_INTRO_BUILD_WRITEBACK
+        if (!String.IsNullOrEmpty(
+            CurrentProject.Settings.GameIntroDefinitionFilePath))
+        {
+            string introPath = ConvertRelativePath(
+                CurrentProject.Settings.GameIntroDefinitionFilePath);
+
+            if (String.IsNullOrEmpty(introPath) || !File.Exists(introPath))
+            {
+                throw new FileNotFoundException(
+                    "The project's intro definition file could not be found.",
+                    introPath);
+            }
+
+            GameIntroDefFile introFile = new GameIntroDefFile();
+
+            using (FileStream introStream = new FileStream(
+                introPath, FileMode.Open, FileAccess.Read, FileShare.Read))
+            using (BinaryReader introReader = new BinaryReader(introStream))
+            {
+                introFile.ReadFile(introReader);
+            }
+
+            if (introFile.BaseGame != CurrentProject.Settings.BaseGame ||
+                introFile.GameType != CurrentProject.Settings.GameType)
+            {
+                throw new InvalidDataException(
+                    "The project's intro definition file is for a different " +
+                    "game or ROM version.");
+            }
+
+            ApplyIntroDataSection(
+                outRomData,
+                introFile.AnimationOffset,
+                introFile.AnimationData,
+                "animation");
+
+            ApplyIntroDataSection(
+                outRomData,
+                introFile.ImageOffset,
+                introFile.ImageData,
+                "image");
+
+            ApplyIntroDataSection(
+                outRomData,
+                introFile.SequenceOffset,
+                introFile.SequenceData,
+                "sequence");
+
+            if (introFile.CameraTableData.Length > 0)
+            {
+                ApplyIntroDataSection(
+                    outRomData,
+                    introFile.CameraOffset,
+                    introFile.CameraTableData,
+                    "camera table");
+
+                foreach (GameIntroDataChunk chunk
+                    in introFile.CameraDataChunks)
+                {
+                    ApplyIntroDataSection(
+                        outRomData,
+                        chunk.Offset,
+                        chunk.Data,
+                        "camera data");
+                }
+            }
+
+            BuildLogPub.AddLine(
+                String.Format(
+                    "Applied intro tables: {0} animations, {1} images, {2} sequence entries.",
+                    introFile.AnimationData.Length / 20,
+                    introFile.ImageData.Length / 16,
+                    introFile.SequenceData.Length / 28),
+                true,
+                BuildLogEventPublisher.BuildLogVerbosity.Minimal);
+        }
+        #endregion
 
 			#region Wrestler Definitions
 			if (!String.IsNullOrEmpty(CurrentProject.Settings.WrestlerDefinitionFilePath) &&
@@ -1198,7 +1311,7 @@ namespace VPWStudio
 				int start = 0;
 				int end = 0;
 				int oldFileSize = 0;
-				
+
 				// 0) check if a replacement file is set
 				if (fte.ReplaceFilePath != null && !fte.ReplaceFilePath.Equals(String.Empty))
 				{
