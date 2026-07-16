@@ -1,4 +1,4 @@
 VPWStudio BAMP Edition
 Version: 0.41
 Assembly version: 0.0.0.41
-Development focus: Game Intro Editor
+Development focus: semantic Game Intro Editor

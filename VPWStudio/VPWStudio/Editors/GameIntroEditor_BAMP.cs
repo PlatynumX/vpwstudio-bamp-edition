@@ -66,6 +66,8 @@ namespace VPWStudio
         private string BampCurrentCameraAxis = "X";
         private bool BampUpdatingUi;
 
+        private ToolStripStatusLabel BampAnimationSemanticStatus;
+
         private void InitializeBampEditor()
         {
             Text = "Game Introduction Editor - BAMP Edition";
@@ -127,6 +129,7 @@ namespace VPWStudio
 
             AddDerivedColumns();
             ConfigureAnimationSelectors();
+            ConfigureAnimationSemanticUi();
             ConfigureSequenceSelector();
             ConfigureCameraEditor();
 
@@ -134,6 +137,8 @@ namespace VPWStudio
                 BampAnimationSelectionChanged;
             dgvAnimations.CellEndEdit +=
                 BampAnimationCellEndEdit;
+            dgvAnimations.CellValidating +=
+                BampAnimationCellValidating;
 
             dgvImages.CellEndEdit +=
                 BampImageCellEndEdit;
@@ -638,6 +643,7 @@ namespace VPWStudio
 
             SyncAnimationPickersToSelection();
             SyncSequenceCameraPicker();
+            UpdateBampAnimationSemanticStatus();
         }
 
         private void RefreshRowHeaders()
@@ -1062,14 +1068,17 @@ namespace VPWStudio
             EventArgs e)
         {
             SyncAnimationPickersToSelection();
+            UpdateBampAnimationSemanticStatus();
         }
 
         private void BampAnimationCellEndEdit(
             object sender,
             DataGridViewCellEventArgs e)
         {
+            NormalizeBampAnimationCell(e.RowIndex, e.ColumnIndex);
             RefreshBampAnimationLabel(e.RowIndex);
             SyncAnimationPickersToSelection();
+            UpdateBampAnimationSemanticStatus();
         }
 
         private void BampImageCellEndEdit(
@@ -2595,5 +2604,297 @@ namespace VPWStudio
 
             return result;
         }
+
+        private void ConfigureAnimationSemanticUi()
+        {
+            string[] headers =
+            {
+                "Wrestler ID4",
+                "Start / Timing",
+                "Animation ID",
+                "End / Count",
+                "X Position",
+                "Y Position",
+                "Z Position",
+                "Rotation",
+                "Animation Flags",
+                "Move / Item Flags",
+                "Extra Flags",
+                "Costume"
+            };
+
+            string[] help =
+            {
+                "Four-digit wrestler ID4 in hexadecimal.",
+                "Intro action start/timing value in hexadecimal.",
+                "AKI animation File ID in hexadecimal.",
+                "Intro action end/count value in hexadecimal.",
+                "Signed X position stored as a 16-bit hexadecimal value.",
+                "Signed Y position stored as a 16-bit hexadecimal value.",
+                "Signed Z position stored as a 16-bit hexadecimal value.",
+                "Facing/rotation value in hexadecimal.",
+                "Animation-control flags byte in hexadecimal.",
+                "Movement/item flags byte in hexadecimal.",
+                "Additional flags byte in hexadecimal.",
+                "Costume byte in hexadecimal."
+            };
+
+            int count = Math.Min(
+                12,
+                dgvAnimations.Columns.Count);
+
+            for (int i = 0; i < count; i++)
+            {
+                DataGridViewColumn column =
+                    dgvAnimations.Columns[i];
+
+                column.HeaderText = headers[i];
+                column.ToolTipText = help[i];
+                column.SortMode =
+                    DataGridViewColumnSortMode.NotSortable;
+                column.AutoSizeMode =
+                    DataGridViewAutoSizeColumnMode.AllCells;
+            }
+
+            tabPage1.Text = "Animation Records";
+            tabPage2.Text = "Image Records";
+            tabPage3.Text = "Sequence";
+            tabPage4.Text = "Camera Motion";
+
+            BampAnimationSemanticStatus =
+                new ToolStripStatusLabel();
+
+            BampAnimationSemanticStatus.Spring = true;
+            BampAnimationSemanticStatus.TextAlign =
+                ContentAlignment.MiddleLeft;
+            BampAnimationSemanticStatus.Text =
+                "Select an animation record.";
+
+            statusStrip1.Items.Add(
+                new ToolStripSeparator());
+
+            statusStrip1.Items.Add(
+                BampAnimationSemanticStatus);
+        }
+
+        private void BampAnimationCellValidating(
+            object sender,
+            DataGridViewCellValidatingEventArgs e)
+        {
+            if (e.RowIndex < 0 ||
+                e.ColumnIndex < 0 ||
+                e.ColumnIndex >= 12)
+            {
+                return;
+            }
+
+            string text =
+                e.FormattedValue == null
+                ? String.Empty
+                : e.FormattedValue.ToString();
+
+            text = NormalizeHex(text);
+
+            bool valid;
+            if (e.ColumnIndex < 8)
+            {
+                ushort value;
+                valid =
+                    text.Length > 0 &&
+                    text.Length <= 4 &&
+                    UInt16.TryParse(
+                        text,
+                        System.Globalization.NumberStyles.HexNumber,
+                        System.Globalization.CultureInfo.InvariantCulture,
+                        out value);
+            }
+            else
+            {
+                byte value;
+                valid =
+                    text.Length > 0 &&
+                    text.Length <= 2 &&
+                    Byte.TryParse(
+                        text,
+                        System.Globalization.NumberStyles.HexNumber,
+                        System.Globalization.CultureInfo.InvariantCulture,
+                        out value);
+            }
+
+            if (!valid)
+            {
+                e.Cancel = true;
+                dgvAnimations.Rows[e.RowIndex]
+                    .Cells[e.ColumnIndex]
+                    .ErrorText =
+                    e.ColumnIndex < 8
+                    ? "Enter a hexadecimal value from 0000 to FFFF."
+                    : "Enter a hexadecimal byte from 00 to FF.";
+            }
+            else
+            {
+                dgvAnimations.Rows[e.RowIndex]
+                    .Cells[e.ColumnIndex]
+                    .ErrorText = String.Empty;
+            }
+        }
+
+        private void NormalizeBampAnimationCell(
+            int rowIndex,
+            int columnIndex)
+        {
+            if (rowIndex < 0 ||
+                rowIndex >= dgvAnimations.Rows.Count ||
+                columnIndex < 0 ||
+                columnIndex >= 12)
+            {
+                return;
+            }
+
+            DataGridViewCell cell =
+                dgvAnimations.Rows[rowIndex]
+                    .Cells[columnIndex];
+
+            string text =
+                cell.Value == null
+                ? String.Empty
+                : NormalizeHex(cell.Value.ToString());
+
+            if (columnIndex < 8)
+            {
+                ushort value;
+                if (UInt16.TryParse(
+                    text,
+                    System.Globalization.NumberStyles.HexNumber,
+                    System.Globalization.CultureInfo.InvariantCulture,
+                    out value))
+                {
+                    cell.Value = value.ToString("X4");
+                }
+            }
+            else
+            {
+                byte value;
+                if (Byte.TryParse(
+                    text,
+                    System.Globalization.NumberStyles.HexNumber,
+                    System.Globalization.CultureInfo.InvariantCulture,
+                    out value))
+                {
+                    cell.Value = value.ToString("X2");
+                }
+            }
+        }
+
+        private static bool TryParseHexByteCell(
+            DataGridViewCell cell,
+            out byte value)
+        {
+            string text =
+                cell.Value == null
+                ? String.Empty
+                : cell.Value.ToString();
+
+            return Byte.TryParse(
+                NormalizeHex(text),
+                System.Globalization.NumberStyles.HexNumber,
+                System.Globalization.CultureInfo.InvariantCulture,
+                out value);
+        }
+
+        private void UpdateBampAnimationSemanticStatus()
+        {
+            if (BampAnimationSemanticStatus == null)
+            {
+                return;
+            }
+
+            DataGridViewRow row =
+                dgvAnimations.CurrentRow;
+
+            if (row == null || row.Index < 0)
+            {
+                BampAnimationSemanticStatus.Text =
+                    "Select an animation record.";
+                return;
+            }
+
+            ushort wrestler;
+            ushort start;
+            ushort animation;
+            ushort end;
+            ushort xRaw;
+            ushort yRaw;
+            ushort zRaw;
+            ushort rotation;
+            byte animationFlags;
+            byte moveFlags;
+            byte extraFlags;
+            byte costume;
+
+            bool valid =
+                TryParseHexUInt16Cell(row.Cells[0], out wrestler) &&
+                TryParseHexUInt16Cell(row.Cells[1], out start) &&
+                TryParseHexUInt16Cell(row.Cells[2], out animation) &&
+                TryParseHexUInt16Cell(row.Cells[3], out end) &&
+                TryParseHexUInt16Cell(row.Cells[4], out xRaw) &&
+                TryParseHexUInt16Cell(row.Cells[5], out yRaw) &&
+                TryParseHexUInt16Cell(row.Cells[6], out zRaw) &&
+                TryParseHexUInt16Cell(row.Cells[7], out rotation) &&
+                TryParseHexByteCell(
+                    row.Cells[8],
+                    out animationFlags) &&
+                TryParseHexByteCell(
+                    row.Cells[9],
+                    out moveFlags) &&
+                TryParseHexByteCell(
+                    row.Cells[10],
+                    out extraFlags) &&
+                TryParseHexByteCell(
+                    row.Cells[11],
+                    out costume);
+
+            if (!valid)
+            {
+                BampAnimationSemanticStatus.Text =
+                    String.Format(
+                        "Record 0x{0:X2}: one or more fields are invalid.",
+                        row.Index);
+                return;
+            }
+
+            uint romOffset =
+                AnimStartLocation +
+                (uint)(row.Index * 20);
+
+            short x = unchecked((short)xRaw);
+            short y = unchecked((short)yRaw);
+            short z = unchecked((short)zRaw);
+
+            BampAnimationSemanticStatus.Text =
+                String.Format(
+                    "Record 0x{0:X2} | ROM 0x{1:X} | " +
+                    "{2} [0x{3:X4}] | {4} [0x{5:X4}] | " +
+                    "start 0x{6:X4}, end 0x{7:X4} | " +
+                    "position {8}, {9}, {10} | rotation 0x{11:X4} | " +
+                    "flags {12:X2}/{13:X2}/{14:X2} | costume {15:X2}",
+                    row.Index,
+                    romOffset,
+                    GetBampWrestlerName(wrestler),
+                    wrestler,
+                    GetBampAnimationLabel(animation),
+                    animation,
+                    start,
+                    end,
+                    x,
+                    y,
+                    z,
+                    rotation,
+                    animationFlags,
+                    moveFlags,
+                    extraFlags,
+                    costume);
+        }
+
     }
 }
