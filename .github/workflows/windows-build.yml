@@ -22,7 +22,7 @@ jobs:
   build:
     name: Build VPWStudio
     runs-on: windows-2022
-    timeout-minutes: 25
+    timeout-minutes: 35
 
     steps:
       - name: Check out repository
@@ -47,19 +47,128 @@ jobs:
             /v:minimal `
             /bl:VPWStudio\build.binlog
 
+      - name: Build bundled AKI Sound Studio
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+
+          $sourceDirectory = Join-Path `
+            $env:GITHUB_WORKSPACE `
+            "External\AKISoundStudio"
+
+          $buildDirectory = Join-Path `
+            $sourceDirectory `
+            "build"
+
+          cmake `
+            -S $sourceDirectory `
+            -B $buildDirectory `
+            -A x64 `
+            -DBUILD_TESTING=OFF `
+            "-DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded"
+
+          cmake `
+            --build $buildDirectory `
+            --config Release `
+            --parallel
+
+          $soundExecutable = Join-Path `
+            $buildDirectory `
+            "Release\AKISoundStudio.exe"
+
+          if (-not (Test-Path -LiteralPath $soundExecutable)) {
+            throw "AKISoundStudio.exe was not produced."
+          }
+
+      - name: Stage bundled sound editor
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+
+          $sourceDirectory = Join-Path `
+            $env:GITHUB_WORKSPACE `
+            "External\AKISoundStudio"
+
+          $buildDirectory = Join-Path `
+            $sourceDirectory `
+            "build\Release"
+
+          $outputDirectory = Join-Path `
+            $env:GITHUB_WORKSPACE `
+            "VPWStudio\VPWStudio\bin\Release"
+
+          $destination = Join-Path `
+            $outputDirectory `
+            "SoundEditor"
+
+          New-Item `
+            -ItemType Directory `
+            -Path $destination `
+            -Force | Out-Null
+
+          Copy-Item `
+            -LiteralPath (
+              Join-Path `
+                $buildDirectory `
+                "AKISoundStudio.exe"
+            ) `
+            -Destination $destination `
+            -Force
+
+          $builtData = Join-Path `
+            $buildDirectory `
+            "data"
+
+          $sourceData = Join-Path `
+            $sourceDirectory `
+            "data"
+
+          $dataToCopy = if (
+            Test-Path -LiteralPath $builtData
+          ) {
+            $builtData
+          } else {
+            $sourceData
+          }
+
+          Copy-Item `
+            -LiteralPath $dataToCopy `
+            -Destination (
+              Join-Path `
+                $destination `
+                "data"
+            ) `
+            -Recurse `
+            -Force
+
       - name: Verify Windows build
         shell: pwsh
         run: |
           $ErrorActionPreference = "Stop"
 
-          $outputDirectory = Join-Path $env:GITHUB_WORKSPACE "VPWStudio\VPWStudio\bin\Release"
-          $executable = Join-Path $outputDirectory "VPWStudio.exe"
+          $outputDirectory = Join-Path `
+            $env:GITHUB_WORKSPACE `
+            "VPWStudio\VPWStudio\bin\Release"
+
+          $executable = Join-Path `
+            $outputDirectory `
+            "VPWStudio.exe"
+
+          $soundEditor = Join-Path `
+            $outputDirectory `
+            "SoundEditor\AKISoundStudio.exe"
 
           if (-not (Test-Path -LiteralPath $executable)) {
             throw "VPWStudio.exe was not produced at $executable"
           }
 
-          Get-ChildItem -LiteralPath $outputDirectory -Recurse |
+          if (-not (Test-Path -LiteralPath $soundEditor)) {
+            throw "Bundled AKISoundStudio.exe was not staged."
+          }
+
+          Get-ChildItem `
+            -LiteralPath $outputDirectory `
+            -Recurse |
             Select-Object FullName, Length
 
       - name: Package Windows build
@@ -67,12 +176,27 @@ jobs:
         run: |
           $ErrorActionPreference = "Stop"
 
-          $outputDirectory = Join-Path $env:GITHUB_WORKSPACE "VPWStudio\VPWStudio\bin\Release"
-          $artifactDirectory = Join-Path $env:GITHUB_WORKSPACE "artifact"
-          $zipPath = Join-Path $artifactDirectory "VPWStudio-BAMP-Edition-Windows.zip"
+          $outputDirectory = Join-Path `
+            $env:GITHUB_WORKSPACE `
+            "VPWStudio\VPWStudio\bin\Release"
 
-          New-Item -ItemType Directory -Path $artifactDirectory -Force | Out-Null
-          Compress-Archive -Path "$outputDirectory\*" -DestinationPath $zipPath -Force
+          $artifactDirectory = Join-Path `
+            $env:GITHUB_WORKSPACE `
+            "artifact"
+
+          $zipPath = Join-Path `
+            $artifactDirectory `
+            "VPWStudio-BAMP-Edition-Windows.zip"
+
+          New-Item `
+            -ItemType Directory `
+            -Path $artifactDirectory `
+            -Force | Out-Null
+
+          Compress-Archive `
+            -Path "$outputDirectory\*" `
+            -DestinationPath $zipPath `
+            -Force
 
           if (-not (Test-Path -LiteralPath $zipPath)) {
             throw "The Windows build ZIP was not created."
@@ -94,5 +218,6 @@ jobs:
           path: |
             VPWStudio/build.binlog
             VPWStudio/VPWStudio/bin/Release/**
+            External/AKISoundStudio/build/**
           if-no-files-found: warn
           retention-days: 30

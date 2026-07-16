@@ -1,6 +1,6 @@
 using System;
 using System.Collections.Generic;
-using System.ComponentModel;
+using System.ComponentModel; using System.Diagnostics;
 using System.Data;
 using System.Drawing;
 using System.Drawing.Imaging;
@@ -1459,15 +1459,120 @@ namespace VPWStudio
 		/// <summary>
 		/// Sounds editor
 		/// </summary>
-		private void soundsToolStripMenuItem_Click(object sender, EventArgs e)
-		{
-			if (Program.CurrentProject == null)
-			{
-				return;
-			}
+		private static string QuoteBampCommandLineArgument(
+            string value)
+        {
+            if (value == null)
+            {
+                return "\"\"";
+            }
 
-			Program.ErrorMessageBox("Sound/Music dialog not yet designed.\nUnless you are a programmer, you can not fix this.");
-		}
+            return "\"" +
+                value.Replace("\"", "\\\"") +
+                "\"";
+        }
+
+        private static string GetBampInputRomPath()
+        {
+            if (Program.CurrentProject == null)
+            {
+                return String.Empty;
+            }
+
+            string romPath =
+                Program.CurrentProject.Settings.InputRomPath;
+
+            if (String.IsNullOrWhiteSpace(romPath))
+            {
+                return String.Empty;
+            }
+
+            if (!Path.IsPathRooted(romPath))
+            {
+                string projectDirectory =
+                    Environment.CurrentDirectory;
+
+                if (!String.IsNullOrWhiteSpace(
+                    Program.CurProjectPath))
+                {
+                    string candidate =
+                        Path.GetDirectoryName(
+                            Program.CurProjectPath);
+
+                    if (!String.IsNullOrWhiteSpace(candidate))
+                    {
+                        projectDirectory = candidate;
+                    }
+                }
+
+                romPath = Path.Combine(
+                    projectDirectory,
+                    romPath);
+            }
+
+            return Path.GetFullPath(romPath);
+        }
+
+        private void soundsToolStripMenuItem_Click(
+            object sender,
+            EventArgs e)
+        {
+            if (Program.CurrentProject == null)
+            {
+                return;
+            }
+
+            string editorDirectory = Path.Combine(
+                Path.GetDirectoryName(
+                    Application.ExecutablePath),
+                "SoundEditor");
+
+            string editorPath = Path.Combine(
+                editorDirectory,
+                "AKISoundStudio.exe");
+
+            if (!File.Exists(editorPath))
+            {
+                Program.ErrorMessageBox(
+                    "The bundled AKI Sound Studio executable is missing.\n\n" +
+                    "Expected location:\n" +
+                    editorPath);
+                return;
+            }
+
+            string romPath = GetBampInputRomPath();
+
+            if (String.IsNullOrWhiteSpace(romPath) ||
+                !File.Exists(romPath))
+            {
+                Program.ErrorMessageBox(
+                    "The current project's input ROM could not be found.\n" +
+                    "Set a valid Input ROM Path in Project Properties.");
+                return;
+            }
+
+            try
+            {
+                ProcessStartInfo startInfo =
+                    new ProcessStartInfo();
+
+                startInfo.FileName = editorPath;
+                startInfo.WorkingDirectory =
+                    editorDirectory;
+                startInfo.UseShellExecute = false;
+                startInfo.Arguments =
+                    QuoteBampCommandLineArgument(
+                        romPath);
+
+                Process.Start(startInfo);
+            }
+            catch (Exception exception)
+            {
+                Program.ErrorMessageBox(
+                    "AKI Sound Studio could not be opened.\n\n" +
+                    exception.Message);
+            }
+        }
 
 		/// <summary>
 		/// Stables editor

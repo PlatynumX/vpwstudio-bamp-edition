@@ -1,4 +1,4 @@
 VPWStudio BAMP Edition
-Version: 0.41
-Assembly version: 0.0.0.41
-Development focus: semantic Game Intro Editor
+Version: 0.42
+Assembly version: 0.0.0.42
+Feature: bundled AKI Sound Studio editor
