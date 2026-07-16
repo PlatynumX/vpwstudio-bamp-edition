@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Text;
 
@@ -10,7 +10,8 @@ namespace VPWStudio
 	/// todo: these should really be in the per-language Resources
 	public static class SharedStrings
 	{
-		public static string MainForm_Title = Properties.Resources.MainForm_Title;
+		public const string BampVersion = "0.40";
+        public static string MainForm_Title = "VPWStudio BAMP Version " + BampVersion;
 
 		#region Save/Load Dialog Filter Strings
 		// generic
