@@ -43,7 +43,7 @@ namespace VPWStudio
 
     internal static class TextureConversionHelper
     {
-        private const int AlphaThreshold = 128;
+        private const int AlphaThreshold = 1;
 
         public static int CountUniqueOpaqueColors(Bitmap source)
         {
