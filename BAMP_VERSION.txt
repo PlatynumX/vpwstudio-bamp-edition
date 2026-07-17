@@ -1,5 +1,6 @@
 VPWStudio BAMP Edition
-Version: 0.47
-Assembly version: 0.0.0.47
-Workflow: sound editor modifies project base ROM first
-Build ROM reloads the project base ROM from disk
+Version: 0.48
+Assembly version: 0.0.0.48
+About screen: BAMP credits and explicit support warning
+Visible external links removed
+S.K. Stylez reference removed

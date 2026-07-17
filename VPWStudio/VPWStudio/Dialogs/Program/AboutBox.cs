@@ -1,5 +1,5 @@
-﻿using System;
-using System.Collections.Generic;
+using System;
+using System.Drawing;
 using System.IO;
 using System.Reflection;
 using System.Text;
@@ -7,172 +7,204 @@ using System.Windows.Forms;
 
 namespace VPWStudio
 {
-	public partial class AboutBox : Form
-	{
-		/// <summary>
-		/// AKI wrestling game hackers
-		/// </summary>
-		private List<String> SpecialThanks = new List<string>()
-		{
-			"WldFb",              // "the godhand of VPW hacking", as proclaimed by freem
-			"Zoinkity",           // world's best N64 hacker (also as proclaimed by freem)
-			"Tokidoim",           // he's the "Toki" in Toki1, Toki2, Toki3... among other things.
-			"Kryogenics",         // many hacks and discoveries throughout the years
-			"JamStubbs",          // created utilities and hosted an influential archive board
-			"S.K. Stylez",        // AKI Club founder, among many other things
-			"DOOMSDAY EWF",       // found many values (textures)
-			"The Pelican",        // also found many values
-			"Keson",              // keeping the future alive with AKI Evo and new tools
-			"jordyad/LIGHTNING",  // pushed me further when I needed it most, providing great info
-			"RetroRandy",         // has provided a lot of No Mercy FileTable updates, among other things (probably the most prolific AKI hacker of the modern era)
-			"Melonbread",         // new (circa 2020-2023) VPW series findings
-			"Baker64",            // for providing the WWF No Mercy prototypes/pre-release versions
-			"(and many others I haven't gotten around to listing yet)"
-		};
+    public partial class AboutBox : Form
+    {
+        public AboutBox()
+        {
+            InitializeComponent();
 
-		/// <summary>
-		/// freem greets
-		/// </summary>
-		private List<String> Greetings = new List<string>()
-		{
-			"the SSC",
-			"the Multitap community",
-			"Generation Hex",
-			"Old Skool Reunion",
-			"AKI Live",
-			"RagDas",
-			"WldFb",
-			"Melly",
-			"G.M. Spectre",
-			"CurdleGames"
-		};
+            Text = "About VPWStudio BAMP";
 
-		public AboutBox()
-		{
-			InitializeComponent();
-			this.Text = String.Format("About {0}", AssemblyTitle);
+            RemoveAboutLinks();
+            ConfigureVersionArea();
 
-			Stream stream = Assembly.GetExecutingAssembly().GetManifestResourceStream("VPWStudio.githash.txt");
-			StreamReader reader = new StreamReader(stream);
-			string gitHash = reader.ReadToEnd();
-			stream = Assembly.GetExecutingAssembly().GetManifestResourceStream("VPWStudio.builddate.txt");
-			reader = new StreamReader(stream);
-			string buildDate = reader.ReadToEnd().Substring(0, 19);
-			reader.Close();
+            StringBuilder information = new StringBuilder();
 
-			labelVersion.Text = String.Format(
-				"{0} (indev) v{1} by freem\nbuilt on {2}; Git hash: {3}",
-				AssemblyProduct,
-				AssemblyVersion,
-				buildDate,
-				gitHash
-			);
+            information.AppendLine(
+                "A Be A Man Productions fork of VPWStudio.");
+            information.AppendLine();
+            information.AppendLine(
+                "BAMP Edition maintained by PlatynumX.");
+            information.AppendLine(
+                "Original VPWStudio created by freem.");
+            information.AppendLine();
+            information.AppendLine(
+                "This fork contains substantial BAMP-specific code, " +
+                "workflow changes, experimental editors, and behavior " +
+                "that does not exist in the original VPWStudio.");
+            information.AppendLine();
+            information.AppendLine(
+                "freem does not maintain, support, test, or troubleshoot " +
+                "this fork and is not responsible for its bugs, builds, " +
+                "modified ROMs, or altered behavior.");
+            information.AppendLine();
+            information.AppendLine(
+                "DON'T FUCKING ASK FREEM FOR HELP WITH THIS VERSION.");
+            information.AppendLine();
+            information.AppendLine("Current BAMP additions include:");
+            information.AppendLine(
+                "- Game Introduction Editor and project writeback");
+            information.AppendLine(
+                "- Transparent PNG texture conversion");
+            information.AppendLine(
+                "- Bundled AKI Sound Studio workflow");
+            information.AppendLine(
+                "- BAMP-specific ROM editing and build changes");
+            information.AppendLine();
+            information.AppendLine(
+                "Always keep backups of project files and base ROMs.");
+            information.AppendLine(
+                "This software is unfinished and may corrupt data.");
+            information.AppendLine();
+            information.AppendLine(
+                "Thanks to the AKI hacking community and everyone whose " +
+                "research helped make the original project possible.");
+            information.AppendLine();
+            information.AppendLine(
+                "This tool remains dedicated to the memory of Maximo.");
+            information.AppendLine();
+            information.AppendLine(
+                "Third-party components retain their respective licenses.");
 
-			StringBuilder sb = new StringBuilder();
-			sb.AppendLine("This is an in-development version of VPW Studio.");
-			sb.AppendLine("It is not meant to be used in 'production'; always make backups of your Project File and Base ROM.");
-			sb.AppendLine();
-			sb.AppendLine("VPW Studio is largely untested and can ruin your data. User discretion is advised.");
-			sb.AppendLine();
+            tbInformation.Text = information.ToString();
+        }
 
-			sb.AppendLine("This tool is dedicated to the memory of Maximo.");
-			sb.AppendLine();
+        private void RemoveAboutLinks()
+        {
+            if (linkLabelAJWorld != null)
+            {
+                tlpBottomSection.Controls.Remove(
+                    linkLabelAJWorld);
+                linkLabelAJWorld.Visible = false;
+                linkLabelAJWorld.Enabled = false;
+            }
 
-			sb.AppendLine("There are a number of people whose work and research is integral in making this project possible.");
-			sb.AppendLine();
-			sb.AppendLine("In no particular order:");
-			for (int i = 0; i < SpecialThanks.Count; i++)
-			{
-				sb.Append(SpecialThanks[i]);
-				if (i < SpecialThanks.Count - 1)
-				{
-					sb.Append(", ");
-				}
-			}
-			sb.AppendLine();
-			sb.AppendLine();
+            if (linkLabelGitHub != null)
+            {
+                tlpBottomSection.Controls.Remove(
+                    linkLabelGitHub);
+                linkLabelGitHub.Visible = false;
+                linkLabelGitHub.Enabled = false;
+            }
 
-			sb.AppendLine("freem sends greetings to:");
-			for (int i = 0; i < Greetings.Count; i++)
-			{
-				sb.Append(Greetings[i]);
-				if (i < Greetings.Count - 1)
-				{
-					sb.Append(", ");
-				}
-			}
-			sb.AppendLine();
-			sb.AppendLine();
+            tlpBottomSection.ColumnStyles.Clear();
+            tlpBottomSection.ColumnCount = 1;
+            tlpBottomSection.ColumnStyles.Add(
+                new ColumnStyle(
+                    SizeType.Percent,
+                    100F));
 
-			sb.AppendLine("This program uses the following libraries, both MIT licensed:");
-			sb.AppendLine("- OpenTK (https://opentk.net/)");
-			sb.Append("- Be.HexBox (https://sourceforge.net/projects/hexbox/)");
+            tlpBottomSection.Controls.SetColumn(
+                okButton,
+                0);
+            tlpBottomSection.Controls.SetColumnSpan(
+                okButton,
+                1);
 
-			tbInformation.Text = sb.ToString();
-		}
+            okButton.Anchor = AnchorStyles.None;
+            okButton.Width = 180;
+            okButton.Text = "&OK";
+        }
 
-		#region Assembly Attribute Accessors
+        private void ConfigureVersionArea()
+        {
+            if (tlpMain.RowStyles.Count > 1)
+            {
+                tlpMain.RowStyles[1].SizeType =
+                    SizeType.Absolute;
+                tlpMain.RowStyles[1].Height = 70F;
+            }
 
-		public string AssemblyTitle
-		{
-			get
-			{
-				object[] attributes = Assembly.GetExecutingAssembly().GetCustomAttributes(typeof(AssemblyTitleAttribute), false);
-				if (attributes.Length > 0)
-				{
-					AssemblyTitleAttribute titleAttribute = (AssemblyTitleAttribute)attributes[0];
-					if (titleAttribute.Title != "")
-					{
-						return titleAttribute.Title;
-					}
-				}
-				return System.IO.Path.GetFileNameWithoutExtension(Assembly.GetExecutingAssembly().CodeBase);
-			}
-		}
+            ClientSize = new Size(640, 470);
 
-		public string AssemblyVersion
-		{
-			get
-			{
-				return Assembly.GetExecutingAssembly().GetName().Version.ToString();
-			}
-		}
+            labelVersion.Font =
+                new Font(
+                    labelVersion.Font,
+                    FontStyle.Bold);
 
-		public string AssemblyDescription
-		{
-			get
-			{
-				object[] attributes = Assembly.GetExecutingAssembly().GetCustomAttributes(typeof(AssemblyDescriptionAttribute), false);
-				if (attributes.Length == 0)
-				{
-					return "";
-				}
-				return ((AssemblyDescriptionAttribute)attributes[0]).Description;
-			}
-		}
+            labelVersion.ForeColor =
+                Color.DarkRed;
 
-		public string AssemblyProduct
-		{
-			get
-			{
-				object[] attributes = Assembly.GetExecutingAssembly().GetCustomAttributes(typeof(AssemblyProductAttribute), false);
-				if (attributes.Length == 0)
-				{
-					return "";
-				}
-				return ((AssemblyProductAttribute)attributes[0]).Product;
-			}
-		}
-		#endregion
+            labelVersion.Text =
+                "VPWStudio BAMP Edition" +
+                Environment.NewLine +
+                "Version " +
+                SharedStrings.BampVersion +
+                Environment.NewLine +
+                "DON'T FUCKING ASK FREEM FOR HELP WITH THIS VERSION.";
 
-		private void linkLabelAJWorld_LinkClicked(object sender, LinkLabelLinkClickedEventArgs e)
-		{
-			System.Diagnostics.Process.Start("https://vpw.ajworld.net/");
-		}
+            string buildDate =
+                ReadEmbeddedText(
+                    "VPWStudio.builddate.txt");
 
-		private void linkLabelGitHub_LinkClicked(object sender, LinkLabelLinkClickedEventArgs e)
-		{
-			System.Diagnostics.Process.Start("https://github.com/AKI-Club/VPWStudio");
-		}
-	}
+            string gitHash =
+                ReadEmbeddedText(
+                    "VPWStudio.githash.txt");
+
+            if (buildDate.Length > 19)
+            {
+                buildDate =
+                    buildDate.Substring(0, 19);
+            }
+
+            if (!String.IsNullOrWhiteSpace(buildDate) ||
+                !String.IsNullOrWhiteSpace(gitHash))
+            {
+                labelVersion.Text +=
+                    Environment.NewLine +
+                    "Built " +
+                    buildDate.Trim() +
+                    (
+                        String.IsNullOrWhiteSpace(gitHash)
+                        ? String.Empty
+                        : " | Git " + gitHash.Trim()
+                    );
+            }
+        }
+
+        private static string ReadEmbeddedText(
+            string resourceName)
+        {
+            try
+            {
+                Assembly assembly =
+                    Assembly.GetExecutingAssembly();
+
+                using (
+                    Stream stream =
+                        assembly.GetManifestResourceStream(
+                            "VPWStudio." +
+                            resourceName))
+                {
+                    if (stream == null)
+                    {
+                        return String.Empty;
+                    }
+
+                    using (
+                        StreamReader reader =
+                            new StreamReader(stream))
+                    {
+                        return reader.ReadToEnd();
+                    }
+                }
+            }
+            catch
+            {
+                return String.Empty;
+            }
+        }
+
+        private void linkLabelAJWorld_LinkClicked(
+            object sender,
+            LinkLabelLinkClickedEventArgs e)
+        {
+        }
+
+        private void linkLabelGitHub_LinkClicked(
+            object sender,
+            LinkLabelLinkClickedEventArgs e)
+        {
+        }
+    }
 }
