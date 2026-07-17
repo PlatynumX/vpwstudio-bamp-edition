@@ -194,7 +194,7 @@ namespace VPWStudio
 
 		public MainForm(string[] args)
 		{
-			InitializeComponent();
+			InitializeComponent(); soundsToolStripMenuItem.Text = "1. Edit Base ROM Sounds..."; buildROMToolStripMenuItem.Text = "2. Build ROM";
 
 			// settings check
 			if (Properties.Settings.Default.GetPreviousVersion("ForceUpgrade") == null)
@@ -1513,6 +1513,48 @@ namespace VPWStudio
             return Path.GetFullPath(romPath);
         }
 
+                private bool ReloadBampProjectBaseRom(
+            bool showConfirmation)
+        {
+            string romPath = GetBampInputRomPath();
+
+            if (String.IsNullOrWhiteSpace(romPath) ||
+                !File.Exists(romPath))
+            {
+                Program.ErrorMessageBox(
+                    "The project base ROM could not be found.\n\n" +
+                    "Set a valid Input ROM Path in Project Properties.");
+                return false;
+            }
+
+            try
+            {
+                Z64Rom reloadedRom = new Z64Rom();
+                reloadedRom.LoadFile(romPath);
+                Program.CurrentInputROM = reloadedRom;
+
+                LoadCodeSegDefs();
+
+                if (showConfirmation)
+                {
+                    Program.InfoMessageBox(
+                        "The project base ROM was reloaded after " +
+                        "AKI Sound Studio closed.\n\n" +
+                        "Texture replacement and Build ROM will now " +
+                        "use the saved sound changes.");
+                }
+
+                return true;
+            }
+            catch (Exception exception)
+            {
+                Program.ErrorMessageBox(
+                    "The project base ROM could not be reloaded.\n\n" +
+                    exception.Message);
+                return false;
+            }
+        }
+
         private void soundsToolStripMenuItem_Click(
             object sender,
             EventArgs e)
@@ -1546,8 +1588,23 @@ namespace VPWStudio
                 !File.Exists(romPath))
             {
                 Program.ErrorMessageBox(
-                    "The current project's input ROM could not be found.\n" +
+                    "The current project's base ROM could not be found.\n" +
                     "Set a valid Input ROM Path in Project Properties.");
+                return;
+            }
+
+            DialogResult confirmation = MessageBox.Show(
+                "AKI Sound Studio will edit this project's base ROM " +
+                "directly:\n\n" +
+                romPath +
+                "\n\nThe first save creates a pre-sound backup beside it." +
+                "\n\nContinue?",
+                SharedStrings.MainForm_Title,
+                MessageBoxButtons.YesNo,
+                MessageBoxIcon.Warning);
+
+            if (confirmation != DialogResult.Yes)
+            {
                 return;
             }
 
@@ -1561,13 +1618,39 @@ namespace VPWStudio
                     editorDirectory;
                 startInfo.UseShellExecute = false;
                 startInfo.Arguments =
+                    "--vpwstudio-base-rom " +
                     QuoteBampCommandLineArgument(
                         romPath);
 
-                Process.Start(startInfo);
+                using (
+                    Process process =
+                    Process.Start(startInfo))
+                {
+                    if (process == null)
+                    {
+                        throw new InvalidOperationException(
+                            "Windows did not start AKI Sound Studio.");
+                    }
+
+                    Enabled = false;
+
+                    try
+                    {
+                        process.WaitForExit();
+                    }
+                    finally
+                    {
+                        Enabled = true;
+                        Activate();
+                    }
+                }
+
+                ReloadBampProjectBaseRom(true);
             }
             catch (Exception exception)
             {
+                Enabled = true;
+
                 Program.ErrorMessageBox(
                     "AKI Sound Studio could not be opened.\n\n" +
                     exception.Message);
@@ -2174,6 +2257,12 @@ namespace VPWStudio
 		/// </summary>
 		private void buildROMToolStripMenuItem_Click(object sender, EventArgs e)
 		{
+            if (Program.CurrentProject != null &&
+                !ReloadBampProjectBaseRom(false))
+            {
+                return;
+            }
+
 			#region Sanity Checking
 			if (Program.CurrentProject == null)
 			{

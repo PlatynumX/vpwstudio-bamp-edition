@@ -109,7 +109,7 @@ struct AppState {
     aki::LabelDatabase labels;
     std::vector<size_t> visibleIndices;
     bool romLoaded = false;
-    bool dirty = false;
+    bool dirty = false; bool vpwStudioBaseRomMode = false; std::filesystem::path vpwStudioBaseRomPath;
 
     HWAVEOUT previewWaveOut = nullptr;
     std::vector<int16_t> previewIntroSamples;
@@ -610,6 +610,26 @@ bool LoadLabelsForRom(const aki::LoadedRom& rom,
 }
 
 void LoadRomFromPath(const std::filesystem::path& path) {
+    if (
+        gApp.vpwStudioBaseRomMode &&
+        !gApp.vpwStudioBaseRomPath.empty())
+    {
+        std::error_code equivalentError;
+
+        const bool sameFile =
+            std::filesystem::equivalent(
+                path,
+                gApp.vpwStudioBaseRomPath,
+                equivalentError);
+
+        if (equivalentError || !sameFile)
+        {
+            ShowError(
+                L"VPWStudio mode is locked to the project's base ROM.");
+            return;
+        }
+    }
+
     PlaySoundW(nullptr, nullptr, 0);
     SetStatus(L"Reading ROM and parsing AKI banks...");
     UpdateWindow(gApp.mainWindow);
@@ -1082,47 +1102,207 @@ void MigrateFromAnotherRom() {
               std::to_wstring(result.targetRateHz) + L" Hz" + (result.resampled ? L" (resampled)." : L"."));
 }
 
-void SavePatchedRom() {
-    if (!gApp.romLoaded) return;
-    if (!gApp.dirty) {
+void SavePatchedRom()
+{
+    if (!gApp.romLoaded)
+    {
+        return;
+    }
+
+    if (!gApp.dirty)
+    {
         ShowInfo(L"There are no unsaved waveform replacements.");
         return;
     }
 
-    std::wstring base = gApp.rom.sourcePath.stem().wstring();
-    if (base.empty()) base = Utf8ToWide(gApp.rom.gameCode);
-    const std::wstring suggested = base + L"_AKI_Sound_Mod.z64";
-    const std::wstring path = SaveFileDialog(
-        L"Save patched AKI ROM",
-        L"Nintendo 64 big-endian ROM (*.z64)\0*.z64\0All files (*.*)\0*.*\0",
-        L"z64",
-        suggested);
-    if (path.empty()) return;
-
+    std::filesystem::path outputPath;
+    std::filesystem::path backupPath;
+    bool createdBackup = false;
     uint32_t crc1 = 0;
     uint32_t crc2 = 0;
     std::string error;
-    if (!aki::SaveRomZ64(gApp.rom, path, crc1, crc2, error)) {
-        ShowError(Utf8ToWide(error));
-        return;
+
+    if (gApp.vpwStudioBaseRomMode)
+    {
+        outputPath =
+            gApp.vpwStudioBaseRomPath.empty()
+            ? gApp.rom.sourcePath
+            : gApp.vpwStudioBaseRomPath;
+
+        if (outputPath.empty())
+        {
+            ShowError(
+                L"VPWStudio did not provide a valid project base ROM.");
+            return;
+        }
+
+        backupPath =
+            outputPath.parent_path() /
+            (
+                outputPath.stem().wstring() +
+                L".pre-sound-studio.bak.z64"
+            );
+
+        std::error_code fileError;
+
+        if (!std::filesystem::exists(backupPath))
+        {
+            std::filesystem::copy_file(
+                outputPath,
+                backupPath,
+                std::filesystem::copy_options::none,
+                fileError);
+
+            if (fileError)
+            {
+                ShowError(
+                    L"Could not create the one-time base ROM backup:\r\n" +
+                    backupPath.wstring() +
+                    L"\r\n\r\n" +
+                    Utf8ToWide(fileError.message()));
+                return;
+            }
+
+            createdBackup = true;
+        }
+
+        std::filesystem::path temporaryPath = outputPath;
+        temporaryPath += L".vpwstudio-sound.tmp";
+
+        std::filesystem::remove(
+            temporaryPath,
+            fileError);
+        fileError.clear();
+
+        if (!aki::SaveRomZ64(
+            gApp.rom,
+            temporaryPath,
+            crc1,
+            crc2,
+            error))
+        {
+            ShowError(Utf8ToWide(error));
+            return;
+        }
+
+        if (!MoveFileExW(
+            temporaryPath.c_str(),
+            outputPath.c_str(),
+            MOVEFILE_REPLACE_EXISTING |
+                MOVEFILE_WRITE_THROUGH))
+        {
+            const DWORD windowsError = GetLastError();
+
+            std::filesystem::remove(
+                temporaryPath,
+                fileError);
+
+            ShowError(
+                L"Could not replace the VPWStudio project base ROM.\r\n"
+                L"Windows error: " +
+                std::to_wstring(windowsError));
+            return;
+        }
+
+        gApp.rom.sourcePath = outputPath;
+    }
+    else
+    {
+        std::wstring base =
+            gApp.rom.sourcePath.stem().wstring();
+
+        if (base.empty())
+        {
+            base = Utf8ToWide(gApp.rom.gameCode);
+        }
+
+        const std::wstring suggested =
+            base + L"_AKI_Sound_Mod.z64";
+
+        const std::wstring selectedPath =
+            SaveFileDialog(
+                L"Save patched AKI ROM",
+                L"Nintendo 64 big-endian ROM (*.z64)\0"
+                L"*.z64\0All files (*.*)\0*.*\0",
+                L"z64",
+                suggested);
+
+        if (selectedPath.empty())
+        {
+            return;
+        }
+
+        outputPath = selectedPath;
+
+        if (!aki::SaveRomZ64(
+            gApp.rom,
+            outputPath,
+            crc1,
+            crc2,
+            error))
+        {
+            ShowError(Utf8ToWide(error));
+            return;
+        }
     }
 
-    for (auto& sound : gApp.rom.sounds) sound.modified = false;
+    for (auto& sound : gApp.rom.sounds)
+    {
+        sound.modified = false;
+    }
+
     gApp.dirty = false;
     UpdateSaveAction();
+
     gApp.lastExportDirectory =
-        std::filesystem::path(path).parent_path();
+        outputPath.parent_path();
+
     RefreshSoundList();
 
     std::wostringstream message;
-    message << L"Saved " << std::filesystem::path(path).filename().wstring()
-            << L"\r\n\r\n"
-            << L"Output format: big-endian .z64\r\n"
-            << L"CRC1: 0x" << std::uppercase << std::hex
-            << std::setw(8) << std::setfill(L'0') << crc1 << L"\r\n"
-            << L"CRC2: 0x" << std::setw(8) << crc2;
+
+    if (gApp.vpwStudioBaseRomMode)
+    {
+        message
+            << L"Updated VPWStudio project base ROM:\r\n"
+            << outputPath.wstring()
+            << L"\r\n\r\n";
+
+        if (createdBackup)
+        {
+            message
+                << L"One-time backup:\r\n"
+                << backupPath.wstring()
+                << L"\r\n\r\n";
+        }
+    }
+    else
+    {
+        message
+            << L"Saved "
+            << outputPath.filename().wstring()
+            << L"\r\n\r\n";
+    }
+
+    message
+        << L"Output format: big-endian .z64\r\n"
+        << L"CRC1: 0x"
+        << std::uppercase
+        << std::hex
+        << std::setw(8)
+        << std::setfill(L'0')
+        << crc1
+        << L"\r\n"
+        << L"CRC2: 0x"
+        << std::setw(8)
+        << crc2;
+
     ShowInfo(message.str());
-    SetStatus(L"Patched ROM saved with repaired N64 CRC.");
+
+    SetStatus(
+        gApp.vpwStudioBaseRomMode
+        ? L"Project base ROM updated; return to VPWStudio to continue."
+        : L"Patched ROM saved with repaired N64 CRC.");
 }
 
 void ReleasePreviewPlayback() {
@@ -1545,11 +1725,65 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR commandLine, int showCo
     ShowWindow(window, showCommand);
     UpdateWindow(window);
 
-    if (commandLine && *commandLine) {
+    if (commandLine && *commandLine)
+    {
         int argc = 0;
-        LPWSTR* argv = CommandLineToArgvW(GetCommandLineW(), &argc);
-        if (argv && argc > 1) LoadRomFromPath(argv[1]);
-        if (argv) LocalFree(argv);
+        LPWSTR* argv =
+            CommandLineToArgvW(
+                GetCommandLineW(),
+                &argc);
+
+        if (
+            argv &&
+            argc > 2 &&
+            std::wstring(argv[1]) ==
+                L"--vpwstudio-base-rom")
+        {
+            gApp.vpwStudioBaseRomMode = true;
+            gApp.vpwStudioBaseRomPath =
+                std::filesystem::absolute(argv[2]);
+
+            LoadRomFromPath(
+                gApp.vpwStudioBaseRomPath);
+
+            SetWindowTextW(
+                gApp.saveRomButton,
+                L"Save Base ROM");
+
+            EnableWindow(
+                gApp.openButton,
+                FALSE);
+
+            HMENU appMenu = GetMenu(
+                gApp.mainWindow);
+
+            EnableMenuItem(
+                appMenu,
+                ID_FILE_OPEN,
+                MF_BYCOMMAND | MF_GRAYED);
+
+            ModifyMenuW(
+                appMenu,
+                ID_FILE_SAVE_ROM,
+                MF_BYCOMMAND | MF_STRING,
+                ID_FILE_SAVE_ROM,
+                L"&Save to project base ROM");
+
+            DrawMenuBar(gApp.mainWindow);
+
+            SetStatus(
+                L"VPWStudio mode: sound changes save directly "
+                L"to the project's base ROM.");
+        }
+        else if (argv && argc > 1)
+        {
+            LoadRomFromPath(argv[1]);
+        }
+
+        if (argv)
+        {
+            LocalFree(argv);
+        }
     }
 
     MSG message{};
