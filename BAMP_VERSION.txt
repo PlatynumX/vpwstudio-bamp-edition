@@ -1,4 +1,5 @@
 VPWStudio BAMP Edition
-Version: 0.42
-Assembly version: 0.0.0.42
-Feature: bundled AKI Sound Studio editor
+Version: 0.44
+Assembly version: 0.0.0.44
+Intro editor: camera editing and persistence disabled
+Wrestler selector: translated ID4 names

@@ -210,7 +210,7 @@ Program.ReloadBaseRom();
 				}
 			}
 
-			if (hasCameraMotionLocation)
+			if (false && hasCameraMotionLocation)
 			{
                 ms.Seek(CameraMotionStartLocation, SeekOrigin.Begin);
 				for (int i = 0; i < numCameraMotionDefs; i++)
@@ -380,7 +380,7 @@ Program.ReloadBaseRom();
                     }
                 }
 
-                LoadSavedCameraData(introFile);
+                // Camera loading is disabled in the BAMP intro editor.
                 return true;
             }
             catch (Exception ex)
@@ -573,7 +573,9 @@ Program.ReloadBaseRom();
                 introFile.AnimationData = BuildAnimationData();
                 introFile.ImageData = BuildImageData();
                 introFile.SequenceData = BuildSequenceData();
-                PopulateCameraFileData(introFile);
+                introFile.CameraOffset = 0;
+            introFile.CameraTableData = new byte[0];
+            introFile.CameraDataChunks.Clear();
 
                 using (FileStream stream = new FileStream(
                     absolutePath, FileMode.Create, FileAccess.Write, FileShare.None))

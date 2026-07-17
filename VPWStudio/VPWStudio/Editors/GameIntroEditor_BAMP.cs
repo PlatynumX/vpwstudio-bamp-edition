@@ -130,8 +130,7 @@ namespace VPWStudio
             AddDerivedColumns();
             ConfigureAnimationSelectors();
             ConfigureAnimationSemanticUi();
-            ConfigureSequenceSelector();
-            ConfigureCameraEditor();
+            DisableBampCameraFeatures();
 
             dgvAnimations.SelectionChanged +=
                 BampAnimationSelectionChanged;
@@ -327,7 +326,7 @@ namespace VPWStudio
             BampWrestlerPicker = new ComboBox();
             BampWrestlerPicker.DropDownStyle =
                 ComboBoxStyle.DropDownList;
-            BampWrestlerPicker.Width = 190;
+            BampWrestlerPicker.Width = 280;
             BampWrestlerPicker.SelectedIndexChanged +=
                 BampWrestlerPickerChanged;
             tools.Controls.Add(BampWrestlerPicker);
@@ -346,6 +345,30 @@ namespace VPWStudio
             BampAnimationPicker.SelectedIndexChanged +=
                 BampAnimationPickerChanged;
             tools.Controls.Add(BampAnimationPicker);
+        }
+
+        private void DisableBampCameraFeatures()
+        {
+            CameraMotionDefs.Clear();
+
+            if (tabControl1.TabPages.Contains(tabPage4))
+            {
+                tabControl1.TabPages.Remove(tabPage4);
+            }
+
+            if (cbCameraMotionList != null)
+            {
+                cbCameraMotionList.Enabled = false;
+                cbCameraMotionList.Visible = false;
+            }
+
+            // Sequence column 6 is the camera-motion ID. Keep its ROM
+            // value intact, but remove it from the editor completely.
+            if (dgvSequence.Columns.Count > 6)
+            {
+                dgvSequence.Columns[6].ReadOnly = true;
+                dgvSequence.Columns[6].Visible = false;
+            }
         }
 
         private void ConfigureSequenceSelector()
@@ -540,7 +563,7 @@ namespace VPWStudio
             return button;
         }
 
-        private void ResetBampEditorUiBeforeLoad()
+                private void ResetBampEditorUiBeforeLoad()
         {
             BampUpdatingUi = true;
 
@@ -553,20 +576,10 @@ namespace VPWStudio
             dgvImages.Rows.Clear();
             dgvSequence.Rows.Clear();
 
-            cbCameraMotionList.Items.Clear();
-
-            if (BampCameraGrid != null)
-            {
-                BampCameraGrid.Rows.Clear();
-            }
-
-            BampCurrentCameraEntry = -1;
-            BampCurrentCameraAxis = "X";
-
             BampUpdatingUi = false;
         }
 
-        private void CaptureBampBaseCapacities()
+                private void CaptureBampBaseCapacities()
         {
             BampAnimationCapacity = IntroAnimations.Count;
             BampImageCapacity = IntroImages.Count;
@@ -578,71 +591,22 @@ namespace VPWStudio
                 CloneImages(IntroImages);
             BampBaseSequence =
                 CloneSequence(IntroSequenceItems);
-            BampBaseCameraDefs =
-                CloneCameraDefs(CameraMotionDefs);
 
+            CameraMotionDefs.Clear();
+            BampBaseCameraDefs.Clear();
             BampCameraCapacities.Clear();
-
-            for (int i = 0; i < CameraMotionDefs.Count; i++)
-            {
-                SetCameraCapacity(i, "X", CameraMotionDefs[i].X.Count);
-                SetCameraCapacity(i, "Y", CameraMotionDefs[i].Y.Count);
-                SetCameraCapacity(i, "Z", CameraMotionDefs[i].Z.Count);
-                SetCameraCapacity(
-                    i,
-                    "Pitch",
-                    CameraMotionDefs[i].Pitch.Count);
-                SetCameraCapacity(
-                    i,
-                    "Pan",
-                    CameraMotionDefs[i].Pan.Count);
-                SetCameraCapacity(
-                    i,
-                    "Roll",
-                    CameraMotionDefs[i].Roll.Count);
-            }
         }
 
-        private void PrepareBampEditorAfterLoad()
+                private void PrepareBampEditorAfterLoad()
         {
+            CameraMotionDefs.Clear();
+
             LoadBampWrestlerNames();
             PopulateBampPickers();
             RefreshAllBampLabels();
             RefreshRowHeaders();
 
-            BampUpdatingUi = true;
-
-            cbCameraMotionList.Items.Clear();
-            for (int i = 0; i < CameraMotionDefs.Count; i++)
-            {
-                cbCameraMotionList.Items.Add(
-                    String.Format(
-                        "{0:X2}: Camera ID 0x{1:X4}",
-                        i,
-                        CameraMotionDefs[i].ID));
-            }
-
-            if (BampCameraAxisPicker.Items.Count > 0)
-            {
-                BampCameraAxisPicker.SelectedIndex = 0;
-            }
-
-            if (cbCameraMotionList.Items.Count > 0)
-            {
-                cbCameraMotionList.SelectedIndex = 0;
-            }
-
-            BampUpdatingUi = false;
-
-            if (cbCameraMotionList.Items.Count > 0)
-            {
-                BampCurrentCameraEntry = 0;
-                BampCurrentCameraAxis = "X";
-                LoadBampCameraEditor();
-            }
-
             SyncAnimationPickersToSelection();
-            SyncSequenceCameraPicker();
             UpdateBampAnimationSemanticStatus();
         }
 
@@ -667,7 +631,7 @@ namespace VPWStudio
             }
         }
 
-        private void LoadBampWrestlerNames()
+                private void LoadBampWrestlerNames()
         {
             BampWrestlerNames.Clear();
 
@@ -675,34 +639,56 @@ namespace VPWStudio
             {
                 string relativePath =
                     Program.CurrentProject.Settings
-                        .WrestlerNameFilePath;
+                    .WrestlerNameFilePath;
 
-                if (!String.IsNullOrEmpty(relativePath))
+                if (!String.IsNullOrWhiteSpace(relativePath))
                 {
                     string path =
                         Program.ConvertRelativePath(relativePath);
 
-                    if (!String.IsNullOrEmpty(path) &&
+                    if (!String.IsNullOrWhiteSpace(path) &&
                         File.Exists(path))
                     {
-                        WrestlerNameFile names =
-                            new WrestlerNameFile();
-
-                        names.LoadFile(path);
-
-                        foreach (WrestlerNameEntry entry in names.Names)
+                        foreach (string rawLine in File.ReadAllLines(path))
                         {
-                            if (!BampWrestlerNames.ContainsKey(
-                                entry.ID4))
-                            {
-                                string name =
-                                    String.IsNullOrEmpty(entry.LongName)
-                                    ? entry.ShortName
-                                    : entry.LongName;
+                            string line =
+                                rawLine == null
+                                ? String.Empty
+                                : rawLine.Trim();
 
-                                BampWrestlerNames.Add(
-                                    entry.ID4,
-                                    name);
+                            if (line.Length == 0 ||
+                                line.StartsWith("#"))
+                            {
+                                continue;
+                            }
+
+                            try
+                            {
+                                WrestlerNameEntry entry =
+                                    new WrestlerNameEntry(line);
+
+                                string name =
+                                    !String.IsNullOrWhiteSpace(
+                                        entry.LongName)
+                                    ? entry.LongName.Trim()
+                                    : (
+                                        !String.IsNullOrWhiteSpace(
+                                            entry.ShortName)
+                                        ? entry.ShortName.Trim()
+                                        : String.Empty
+                                    );
+
+                                if (entry.ID4 != 0 &&
+                                    name.Length > 0)
+                                {
+                                    BampWrestlerNames[entry.ID4] =
+                                        name;
+                                }
+                            }
+                            catch
+                            {
+                                // Ignore one malformed name line instead of
+                                // discarding every translated wrestler name.
                             }
                         }
                     }
@@ -710,7 +696,7 @@ namespace VPWStudio
             }
             catch
             {
-                BampWrestlerNames.Clear();
+                // Keep valid names already loaded before the failure.
             }
 
             foreach (
@@ -723,7 +709,7 @@ namespace VPWStudio
                     BampWrestlerNames.Add(
                         animation.WrestlerID4,
                         String.Format(
-                            "Wrestler ID4 0x{0:X4}",
+                            "Unknown Wrestler",
                             animation.WrestlerID4));
                 }
             }
@@ -744,10 +730,7 @@ namespace VPWStudio
                 wrestlerChoices.Add(
                     new IntroChoice(
                         pair.Key,
-                        String.Format(
-                            "{0} [0x{1:X4}]",
-                            pair.Value,
-                            pair.Key)));
+                        String.Format("{0} /{1:X4}", pair.Value, pair.Key)));
             }
 
             wrestlerChoices.Sort(
@@ -1173,12 +1156,11 @@ namespace VPWStudio
             combo.SelectedIndex = -1;
         }
 
-        private void BampWrestlerPickerChanged(
+                private void BampWrestlerPickerChanged(
             object sender,
             EventArgs e)
         {
-            if (BampUpdatingUi ||
-                dgvAnimations.CurrentRow == null)
+            if (BampUpdatingUi)
             {
                 return;
             }
@@ -1187,16 +1169,24 @@ namespace VPWStudio
                 BampWrestlerPicker.SelectedItem
                 as IntroChoice;
 
-            if (choice == null)
+            DataGridViewRow row =
+                dgvAnimations.CurrentRow;
+
+            if (choice == null ||
+                row == null ||
+                row.Index < 0)
             {
                 return;
             }
 
-            dgvAnimations.CurrentRow.Cells[0].Value =
+            row.Cells[0].Value =
                 choice.Value.ToString("X4");
 
-            RefreshBampAnimationLabel(
-                dgvAnimations.CurrentRow.Index);
+            RefreshBampAnimationLabel(row.Index);
+            UpdateBampAnimationSemanticStatus();
+
+            dgvAnimations.NotifyCurrentCellDirty(true);
+            dgvAnimations.EndEdit();
         }
 
         private void BampAnimationPickerChanged(
@@ -2659,7 +2649,6 @@ namespace VPWStudio
             tabPage1.Text = "Animation Records";
             tabPage2.Text = "Image Records";
             tabPage3.Text = "Sequence";
-            tabPage4.Text = "Camera Motion";
 
             BampAnimationSemanticStatus =
                 new ToolStripStatusLabel();

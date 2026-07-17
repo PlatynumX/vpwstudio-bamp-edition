@@ -30,7 +30,7 @@ namespace VPWStudio
     {
         private static readonly byte[] Magic = Encoding.ASCII.GetBytes("VPWSINT2");
 
-        public const ushort CurrentVersion = 2;
+        public const ushort CurrentVersion = 1;
 
         public VPWGames BaseGame;
         public SpecificGame GameType;
@@ -118,8 +118,8 @@ namespace VPWStudio
 
             if (version >= 2)
             {
-                CameraOffset = reader.ReadUInt32();
-                CameraTableData = ReadSection(reader, "camera table");
+                reader.ReadUInt32();
+                SkipSection(reader, "camera table");
 
                 int chunkCount = reader.ReadInt32();
                 if (chunkCount < 0 || chunkCount > 100000)
@@ -130,15 +130,18 @@ namespace VPWStudio
 
                 for (int i = 0; i < chunkCount; i++)
                 {
-                    uint offset = reader.ReadUInt32();
-                    byte[] data = ReadSection(
+                    reader.ReadUInt32();
+                    SkipSection(
                         reader,
-                        String.Format("camera chunk {0}", i));
-
-                    CameraDataChunks.Add(
-                        new GameIntroDataChunk(offset, data));
+                        String.Format(
+                            "camera chunk {0}",
+                            i));
                 }
             }
+
+            CameraOffset = 0;
+            CameraTableData = new byte[0];
+            CameraDataChunks.Clear();
 
             Validate();
         }
@@ -166,16 +169,6 @@ namespace VPWStudio
             WriteSection(writer, AnimationData);
             WriteSection(writer, ImageData);
             WriteSection(writer, SequenceData);
-
-            writer.Write(CameraOffset);
-            WriteSection(writer, CameraTableData);
-
-            writer.Write(CameraDataChunks.Count);
-            foreach (GameIntroDataChunk chunk in CameraDataChunks)
-            {
-                writer.Write(chunk.Offset);
-                WriteSection(writer, chunk.Data);
-            }
         }
 
         public void Validate()
@@ -258,6 +251,37 @@ namespace VPWStudio
             }
 
             return data;
+        }
+
+        private static void SkipSection(
+            BinaryReader reader,
+            string sectionName)
+        {
+            int length = reader.ReadInt32();
+
+            if (length < 0)
+            {
+                throw new InvalidDataException(
+                    String.Format(
+                        "The {0} section has a negative length.",
+                        sectionName));
+            }
+
+            long remaining =
+                reader.BaseStream.Length -
+                reader.BaseStream.Position;
+
+            if (length > remaining)
+            {
+                throw new EndOfStreamException(
+                    String.Format(
+                        "The {0} section is truncated.",
+                        sectionName));
+            }
+
+            reader.BaseStream.Seek(
+                length,
+                SeekOrigin.Current);
         }
 
         private static void WriteSection(
