@@ -94,10 +94,10 @@ namespace VPWStudio
                     SizeType.Percent,
                     100F));
 
-            tlpBottomSection.Controls.SetColumn(
+            tlpBottomSection.SetColumn(
                 okButton,
                 0);
-            tlpBottomSection.Controls.SetColumnSpan(
+            tlpBottomSection.SetColumnSpan(
                 okButton,
                 1);
 
