@@ -641,72 +641,84 @@ namespace VPWStudio
             }
         }
 
-                private void LoadBampWrestlerNames()
+                        private void LoadBampWrestlerNames()
         {
             BampWrestlerNames.Clear();
 
+            Dictionary<ushort, string> names = null;
+
             try
             {
-                string relativePath =
-                    Program.CurrentProject.Settings
-                    .WrestlerNameFilePath;
-
-                if (!String.IsNullOrWhiteSpace(relativePath))
+                switch (
+                    Program.CurrentProject.Settings.BaseGame)
                 {
-                    string path =
-                        Program.ConvertRelativePath(relativePath);
-
-                    if (!String.IsNullOrWhiteSpace(path) &&
-                        File.Exists(path))
-                    {
-                        foreach (string rawLine in File.ReadAllLines(path))
+                    case VPWGames.Revenge:
+                        using (
+                            Editors.Revenge.WrestlerMain_Revenge
+                            editor =
+                            new Editors.Revenge
+                                .WrestlerMain_Revenge())
                         {
-                            string line =
-                                rawLine == null
-                                ? String.Empty
-                                : rawLine.Trim();
-
-                            if (line.Length == 0 ||
-                                line.StartsWith("#"))
-                            {
-                                continue;
-                            }
-
-                            try
-                            {
-                                WrestlerNameEntry entry =
-                                    new WrestlerNameEntry(line);
-
-                                string name =
-                                    !String.IsNullOrWhiteSpace(
-                                        entry.LongName)
-                                    ? entry.LongName.Trim()
-                                    : (
-                                        !String.IsNullOrWhiteSpace(
-                                            entry.ShortName)
-                                        ? entry.ShortName.Trim()
-                                        : String.Empty
-                                    );
-
-                                if (entry.ID4 != 0 &&
-                                    name.Length > 0)
-                                {
-                                    BampWrestlerNames[entry.ID4] =
-                                        name;
-                                }
-                            }
-                            catch
-                            {
-                                // Ignore one malformed name line instead of
-                                // discarding every translated wrestler name.
-                            }
+                            names =
+                                editor.GetBampWrestlerNameMap();
                         }
-                    }
+                        break;
+
+                    case VPWGames.WM2K:
+                        using (
+                            Editors.WM2K.WrestlerMain_WM2K
+                            editor =
+                            new Editors.WM2K
+                                .WrestlerMain_WM2K())
+                        {
+                            names =
+                                editor.GetBampWrestlerNameMap();
+                        }
+                        break;
+
+                    case VPWGames.VPW2:
+                        using (
+                            Editors.VPW2.WrestlerMain_VPW2
+                            editor =
+                            new Editors.VPW2
+                                .WrestlerMain_VPW2())
+                        {
+                            names =
+                                editor.GetBampWrestlerNameMap();
+                        }
+                        break;
+
+                    case VPWGames.NoMercy:
+                        using (
+                            Editors.NoMercy.WrestlerMain_NoMercy
+                            editor =
+                            new Editors.NoMercy
+                                .WrestlerMain_NoMercy())
+                        {
+                            names =
+                                editor.GetBampWrestlerNameMap();
+                        }
+                        break;
                 }
             }
             catch
             {
-                // Keep valid names already loaded before the failure.
+                names = null;
+            }
+
+            if (names != null)
+            {
+                foreach (
+                    KeyValuePair<ushort, string> pair
+                    in names)
+                {
+                    if (!String.IsNullOrWhiteSpace(
+                        pair.Value))
+                    {
+                        BampWrestlerNames[pair.Key] =
+                            pair.Value.Trim();
+                    }
+                }
             }
 
             foreach (
@@ -718,9 +730,7 @@ namespace VPWStudio
                 {
                     BampWrestlerNames.Add(
                         animation.WrestlerID4,
-                        String.Format(
-                            "Unknown Wrestler",
-                            animation.WrestlerID4));
+                        "Unknown Wrestler");
                 }
             }
         }

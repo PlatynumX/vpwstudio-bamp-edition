@@ -1,5 +1,4 @@
 VPWStudio BAMP Edition
-Version: 0.45
-Assembly version: 0.0.0.45
-Fix: camera-free intro editor startup
-Camera UI and persistence remain disabled
+Version: 0.46
+Assembly version: 0.0.0.46
+Intro wrestler names: sourced from existing game wrestler editors

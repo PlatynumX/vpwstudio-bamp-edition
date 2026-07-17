@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Data;
@@ -214,7 +214,7 @@ namespace VPWStudio.Editors.NoMercy
 		}
 
 		/// <summary>
-		/// 
+		///
 		/// </summary>
 		private void lbWrestlers_SelectedIndexChanged(object sender, EventArgs e)
 		{
@@ -513,5 +513,48 @@ namespace VPWStudio.Editors.NoMercy
 			PopulateList();
 			lbWrestlers.SelectedIndex = oldIndex;
 		}
-	}
+
+
+        public Dictionary<ushort, string>
+            GetBampWrestlerNameMap()
+        {
+            Dictionary<ushort, string> result =
+                new Dictionary<ushort, string>();
+
+            foreach (
+                KeyValuePair<int, WrestlerDefinition> pair
+                in WrestlerDefs)
+            {
+                WrestlerDefinition wrestler = pair.Value;
+                string name = String.Empty;
+
+                try
+                {
+                    name =
+                        DefaultNames
+                        .Entries[wrestler.ProfileIndex + 1]
+                        .Text;
+                }
+                catch
+                {
+                    name = String.Empty;
+                }
+
+                name = name == null
+                    ? String.Empty
+                    : name.Trim();
+
+                if (name.Length > 0 &&
+                    !result.ContainsKey(wrestler.WrestlerID4))
+                {
+                    result.Add(
+                        wrestler.WrestlerID4,
+                        name);
+                }
+            }
+
+            return result;
+        }
+
+}
 }

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Data;
@@ -123,7 +123,7 @@ namespace VPWStudio.Editors.WM2K
 		}
 
 		/// <summary>
-		/// 
+		///
 		/// </summary>
 		/// <param name="wdef"></param>
 		private void LoadEntryData(WrestlerDefinition wdef)
@@ -146,7 +146,7 @@ namespace VPWStudio.Editors.WM2K
 		}
 
 		/// <summary>
-		/// 
+		///
 		/// </summary>
 		private void lbWrestlers_SelectedIndexChanged(object sender, EventArgs e)
 		{
@@ -313,5 +313,50 @@ namespace VPWStudio.Editors.WM2K
 			LoadCostumeEditor(4);
 		}
 		#endregion
-	}
+
+
+        public Dictionary<ushort, string>
+            GetBampWrestlerNameMap()
+        {
+            Dictionary<ushort, string> result =
+                new Dictionary<ushort, string>();
+
+            foreach (
+                KeyValuePair<int, WrestlerDefinition> pair
+                in WrestlerDefs)
+            {
+                WrestlerDefinition wrestler = pair.Value;
+                string name = String.Empty;
+
+                try
+                {
+                    name =
+                        NameHandler.DecodeName(
+                            wrestler.Name)[1];
+                }
+                catch
+                {
+                    name =
+                        wrestler.Name == null
+                        ? String.Empty
+                        : wrestler.Name;
+                }
+
+                name = name == null
+                    ? String.Empty
+                    : name.Trim();
+
+                if (name.Length > 0 &&
+                    !result.ContainsKey(wrestler.WrestlerID4))
+                {
+                    result.Add(
+                        wrestler.WrestlerID4,
+                        name);
+                }
+            }
+
+            return result;
+        }
+
+}
 }
