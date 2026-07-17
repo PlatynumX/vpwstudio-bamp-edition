@@ -1,5 +1,5 @@
 VPWStudio BAMP Edition
-Version: 0.44
-Assembly version: 0.0.0.44
-Intro editor: camera editing and persistence disabled
-Wrestler selector: translated ID4 names
+Version: 0.45
+Assembly version: 0.0.0.45
+Fix: camera-free intro editor startup
+Camera UI and persistence remain disabled

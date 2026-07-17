@@ -351,6 +351,16 @@ namespace VPWStudio
         {
             CameraMotionDefs.Clear();
 
+            // Camera editing is disabled, but legacy picker-refresh code
+            // still expects this field to exist. Keep a detached, hidden
+            // control so opening the editor cannot throw a null reference.
+            if (BampSequenceCameraPicker == null)
+            {
+                BampSequenceCameraPicker = new ComboBox();
+                BampSequenceCameraPicker.Enabled = false;
+                BampSequenceCameraPicker.Visible = false;
+            }
+
             if (tabControl1.TabPages.Contains(tabPage4))
             {
                 tabControl1.TabPages.Remove(tabPage4);
@@ -1115,6 +1125,11 @@ namespace VPWStudio
 
         private void SyncSequenceCameraPicker()
         {
+            if (BampSequenceCameraPicker == null)
+            {
+                return;
+            }
+
             if (BampUpdatingUi ||
                 dgvSequence.CurrentRow == null)
             {
@@ -1219,6 +1234,11 @@ namespace VPWStudio
             object sender,
             EventArgs e)
         {
+            if (BampSequenceCameraPicker == null)
+            {
+                return;
+            }
+
             if (BampUpdatingUi ||
                 dgvSequence.CurrentRow == null)
             {
