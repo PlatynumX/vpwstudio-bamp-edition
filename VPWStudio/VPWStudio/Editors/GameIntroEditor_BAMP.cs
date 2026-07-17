@@ -641,7 +641,7 @@ namespace VPWStudio
             }
         }
 
-                        private void LoadBampWrestlerNames()
+                                private void LoadBampWrestlerNames()
         {
             BampWrestlerNames.Clear();
 
