@@ -60,8 +60,6 @@ namespace VPWStudio
                 "Thanks to the AKI hacking community and everyone whose " +
                 "research helped make the original project possible.");
             information.AppendLine();
-            information.AppendLine(
-                "This tool remains dedicated to the memory of Maximo.");
             information.AppendLine();
             information.AppendLine(
                 "Third-party components retain their respective licenses.");
