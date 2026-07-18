@@ -1,6 +1,6 @@
 VPWStudio BAMP Edition
-Version: 0.48
-Assembly version: 0.0.0.48
-About screen: BAMP credits and explicit support warning
-Visible external links removed
-S.K. Stylez reference removed
+Version: 0.49
+Assembly version: 0.0.0.49
+Fix: later-game intro OK no longer shows unfinished writeback error
+UI: original VPWStudio project/menu labels restored
+Workflow: sound-first base ROM behavior retained

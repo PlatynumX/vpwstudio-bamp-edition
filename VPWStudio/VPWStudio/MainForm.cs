@@ -194,7 +194,7 @@ namespace VPWStudio
 
 		public MainForm(string[] args)
 		{
-			InitializeComponent(); soundsToolStripMenuItem.Text = "1. Edit Base ROM Sounds..."; buildROMToolStripMenuItem.Text = "2. Build ROM";
+			InitializeComponent();
 
 			// settings check
 			if (Properties.Settings.Default.GetPreviousVersion("ForceUpgrade") == null)
@@ -1340,50 +1340,65 @@ namespace VPWStudio
 		/// <summary>
 		/// Game intro editor
 		/// </summary>
-		private void gameIntroductionToolStripMenuItem_Click(object sender, EventArgs e)
-		{
-			if (Program.CurrentProject == null)
-			{
-				return;
-			}
+		        private void gameIntroductionToolStripMenuItem_Click(
+            object sender,
+            EventArgs e)
+        {
+            if (Program.CurrentProject == null)
+            {
+                return;
+            }
 
-			if (!IntroEditorSupported.Contains(Program.CurrentProject.Settings.BaseGame))
-			{
-				MessageBox.Show("Game Intro Editor only \"works\" for Revenge and later.\nUnless you are a programmer, you can not fix this.", "Game Intro Editor");
-				return;
-			}
+            if (!IntroEditorSupported.Contains(
+                Program.CurrentProject.Settings.BaseGame))
+            {
+                MessageBox.Show(
+                    "Game Intro Editor only \"works\" for Revenge and later.\n" +
+                    "Unless you are a programmer, you can not fix this.",
+                    "Game Intro Editor");
+                return;
+            }
 
-			if (Program.CurrentProject.Settings.BaseGame == VPWGames.VPW64)
-			{
-				// specifically vpw64
-				//
-				if (GameIntroEditor_VPW64 == null || GameIntroEditor_VPW64.IsDisposed)
-				{
-					GameIntroEditor_VPW64 = new Editors.VPW64.GameIntroEditor_VPW64();
-				}
+            if (
+                Program.CurrentProject.Settings.BaseGame ==
+                VPWGames.VPW64)
+            {
+                if (
+                    GameIntroEditor_VPW64 == null ||
+                    GameIntroEditor_VPW64.IsDisposed)
+                {
+                    GameIntroEditor_VPW64 =
+                        new Editors.VPW64.GameIntroEditor_VPW64();
+                }
 
-				if (GameIntroEditor_VPW64.ShowDialog() == DialogResult.OK)
-				{
-					// update intro data
-					// ...wait a minute, there's currently no OK or Cancel buttons on this form!
-					Program.ErrorMessageBox("Editing/writeback not implemented yet\nUnless you are a programmer, you can not fix this.");
-				}
-			}
-			else
-			{
-				// assume Revenge or later
-				if (GameIntroEditor_Later == null || GameIntroEditor_Later.IsDisposed)
-				{
-					GameIntroEditor_Later = new GameIntroEditor_Later();
-				}
+                if (
+                    GameIntroEditor_VPW64.ShowDialog() ==
+                    DialogResult.OK)
+                {
+                    Program.ErrorMessageBox(
+                        "Editing/writeback not implemented yet\n" +
+                        "Unless you are a programmer, you can not fix this.");
+                }
 
-				if (GameIntroEditor_Later.ShowDialog() == DialogResult.OK)
-				{
-					// update intro data
-					Program.ErrorMessageBox("Editing/writeback not implemented yet\nUnless you are a programmer, you can not fix this.");
-				}
-			}
-		}
+                return;
+            }
+
+            if (
+                GameIntroEditor_Later == null ||
+                GameIntroEditor_Later.IsDisposed)
+            {
+                GameIntroEditor_Later =
+                    new GameIntroEditor_Later();
+            }
+
+            // Revenge, WM2000, VPW2, and No Mercy save their
+            // project-side intro data inside GameIntroEditor_Later.
+            // Do not show the original unfinished-writeback message
+            // after a successful OK.
+            GameIntroEditor_Later.ShowDialog();
+
+            UpdateTitleBar();
+        }
 
 		private void matchRulesetsToolStripMenuItem_Click(object sender, EventArgs e)
 		{
