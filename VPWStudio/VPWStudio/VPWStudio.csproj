@@ -263,6 +263,9 @@
     <Compile Include="Editors\VPW64\GameIntroEditor_VPW64.Designer.cs">
       <DependentUpon>GameIntroEditor_VPW64.cs</DependentUpon>
     </Compile>
+    <Compile Include="Editors\WM2K\ArenaEditor_WM2K.cs">
+      <SubType>Form</SubType>
+    </Compile>
     <Compile Include="Editors\WM2K\Ruleset_WM2K.cs">
       <SubType>Form</SubType>
     </Compile>
@@ -621,6 +624,7 @@
     <Compile Include="MainForm.Designer.cs">
       <DependentUpon>MainForm.cs</DependentUpon>
     </Compile>
+    <Compile Include="ProgStructures\WM2KArenaPatchFile.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="ProgStructures\Project\ProjectSettings.cs" />
     <Compile Include="ProgStructures\StableDefFile.cs" />

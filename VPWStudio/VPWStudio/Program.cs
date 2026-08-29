@@ -988,7 +988,22 @@ namespace VPWStudio
 			 * and anything else not involving the FileTable.
 			 */
 
-        #region Game Intro Definitions
+        #region WM2000 Arena Definitions
+            // BAMP_WM2K_ARENA_BUILD_WRITEBACK
+            if (CurrentProject.Settings.BaseGame == VPWGames.WM2K)
+            {
+                int arenaPatchCount = WM2KArenaPatchFile.ApplyProjectPatches(outRomData);
+                if (arenaPatchCount > 0)
+                {
+                    BuildLogPub.AddLine(
+                        String.Format("Applied {0} WM2000 arena table edits.", arenaPatchCount),
+                        true,
+                        BuildLogEventPublisher.BuildLogVerbosity.Minimal);
+                }
+            }
+            #endregion
+
+            #region Game Intro Definitions
         // BAMP_INTRO_BUILD_WRITEBACK
         if (!String.IsNullOrEmpty(
             CurrentProject.Settings.GameIntroDefinitionFilePath))

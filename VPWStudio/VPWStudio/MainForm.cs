@@ -133,6 +133,11 @@ namespace VPWStudio
 		public Editors.WM2K.WrestlerMain_WM2K WrestlerMain_WM2K = null;
 
 		/// <summary>
+		/// Native WM2000 Arena Editor.
+		/// </summary>
+		public Editors.WM2K.ArenaEditor_WM2K ArenaEditor_WM2K = null;
+
+		/// <summary>
 		/// WM2K Stable Editor
 		/// </summary>
 		public Editors.WM2K.StableDefs_WM2K StableDefs_WM2K = null;
@@ -1135,15 +1140,42 @@ namespace VPWStudio
 		/// <summary>
 		/// Arena editor
 		/// </summary>
-		private void arenasToolStripMenuItem_Click(object sender, EventArgs e)
-		{
-			if (Program.CurrentProject == null)
-			{
-				return;
-			}
+		        private void arenasToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            if (Program.CurrentProject == null)
+            {
+                return;
+            }
 
-			Program.ErrorMessageBox("The Arena dialog has not been designed or implemented.\nUnless you are a programmer, you can not fix this.");
-		}
+            if (Program.CurrentProject.Settings.BaseGame != VPWGames.WM2K)
+            {
+                Program.ErrorMessageBox(
+                    "The native Arena Editor is currently implemented for WWF WrestleMania 2000 projects.");
+                return;
+            }
+
+            try
+            {
+                if (ArenaEditor_WM2K == null || ArenaEditor_WM2K.IsDisposed)
+                {
+                    ArenaEditor_WM2K = new Editors.WM2K.ArenaEditor_WM2K();
+                }
+
+                if (ArenaEditor_WM2K.WindowState == FormWindowState.Minimized)
+                {
+                    ArenaEditor_WM2K.WindowState = FormWindowState.Normal;
+                }
+
+                ArenaEditor_WM2K.MdiParent = this;
+                ArenaEditor_WM2K.Show();
+                ArenaEditor_WM2K.BringToFront();
+            }
+            catch (Exception exception)
+            {
+                Program.ErrorMessageBox(
+                    "Unable to open the WM2000 Arena Editor.\n\n" + exception.Message);
+            }
+        }
 
 		/// <summary>
 		/// Championship editor
@@ -2970,6 +3002,10 @@ namespace VPWStudio
 			if (projFileOpen)
 			{
 				VPWGames bg = Program.CurrentProject.Settings.BaseGame;
+
+				// BAMP_WM2K_ARENA_MENU
+				arenasToolStripMenuItem.Enabled = (bg == VPWGames.WM2K);
+				arenasToolStripMenuItem.Visible = true;
 
 				// special case for Story Mode
 				bool showStoryMode = (bg == VPWGames.WM2K || bg == VPWGames.VPW2 || bg == VPWGames.NoMercy);

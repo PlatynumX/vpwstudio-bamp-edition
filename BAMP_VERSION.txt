@@ -1,4 +1,7 @@
 VPWStudio BAMP Edition
-Version: 0.50
-Assembly version: 0.0.0.50
-About screen: removed Maximo dedication line
+Version: 0.51
+Assembly version: 0.0.0.51
+Native WM2000 Arena Editor: enabled
+Renderer/parser ported from WM2000 Arena Studio Proof 10
+No browser, WebView, Three.js, or CDN dependency
+Project writeback: ProjectFiles/ArenaDefinitions.vpwsarena
