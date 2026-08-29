@@ -154,6 +154,11 @@ namespace VPWStudio
 		/// </summary>
 		public Editors.VPW2.WrestlerMain_VPW2 WrestlerMain_VPW2 = null;
 
+        /// <summary>
+        /// Native VPW2 Arena Editor.
+        /// </summary>
+        public Editors.VPW2.ArenaEditor_VPW2 ArenaEditor_VPW2 = null;
+
 		/// <summary>
 		/// VPW2 Stable Editor
 		/// </summary>
@@ -1140,40 +1145,62 @@ namespace VPWStudio
 		/// <summary>
 		/// Arena editor
 		/// </summary>
-		        private void arenasToolStripMenuItem_Click(object sender, EventArgs e)
+		                private void arenasToolStripMenuItem_Click(
+            object sender,
+            EventArgs e)
         {
             if (Program.CurrentProject == null)
             {
                 return;
             }
 
-            if (Program.CurrentProject.Settings.BaseGame != VPWGames.WM2K)
+            switch (Program.CurrentProject.Settings.BaseGame)
             {
-                Program.ErrorMessageBox(
-                    "The native Arena Editor is currently implemented for WWF WrestleMania 2000 projects.");
-                return;
-            }
+                case VPWGames.WM2K:
+                    if (ArenaEditor_WM2K == null ||
+                        ArenaEditor_WM2K.IsDisposed)
+                    {
+                        ArenaEditor_WM2K =
+                            new Editors.WM2K.ArenaEditor_WM2K();
+                    }
 
-            try
-            {
-                if (ArenaEditor_WM2K == null || ArenaEditor_WM2K.IsDisposed)
-                {
-                    ArenaEditor_WM2K = new Editors.WM2K.ArenaEditor_WM2K();
-                }
+                    if (ArenaEditor_WM2K.WindowState ==
+                        FormWindowState.Minimized)
+                    {
+                        ArenaEditor_WM2K.WindowState =
+                            FormWindowState.Normal;
+                    }
 
-                if (ArenaEditor_WM2K.WindowState == FormWindowState.Minimized)
-                {
-                    ArenaEditor_WM2K.WindowState = FormWindowState.Normal;
-                }
+                    ArenaEditor_WM2K.MdiParent = this;
+                    ArenaEditor_WM2K.Show();
+                    ArenaEditor_WM2K.BringToFront();
+                    break;
 
-                ArenaEditor_WM2K.MdiParent = this;
-                ArenaEditor_WM2K.Show();
-                ArenaEditor_WM2K.BringToFront();
-            }
-            catch (Exception exception)
-            {
-                Program.ErrorMessageBox(
-                    "Unable to open the WM2000 Arena Editor.\n\n" + exception.Message);
+                case VPWGames.VPW2:
+                    if (ArenaEditor_VPW2 == null ||
+                        ArenaEditor_VPW2.IsDisposed)
+                    {
+                        ArenaEditor_VPW2 =
+                            new Editors.VPW2.ArenaEditor_VPW2();
+                    }
+
+                    if (ArenaEditor_VPW2.WindowState ==
+                        FormWindowState.Minimized)
+                    {
+                        ArenaEditor_VPW2.WindowState =
+                            FormWindowState.Normal;
+                    }
+
+                    ArenaEditor_VPW2.MdiParent = this;
+                    ArenaEditor_VPW2.Show();
+                    ArenaEditor_VPW2.BringToFront();
+                    break;
+
+                default:
+                    Program.ErrorMessageBox(
+                        "The native Arena Editor is currently implemented " +
+                        "for WWF WrestleMania 2000 and Virtual Pro Wrestling 2.");
+                    break;
             }
         }
 
@@ -3004,7 +3031,7 @@ namespace VPWStudio
 				VPWGames bg = Program.CurrentProject.Settings.BaseGame;
 
 				// BAMP_WM2K_ARENA_MENU
-				arenasToolStripMenuItem.Enabled = (bg == VPWGames.WM2K);
+				arenasToolStripMenuItem.Enabled = (bg == VPWGames.WM2K || bg == VPWGames.VPW2);
 				arenasToolStripMenuItem.Visible = true;
 
 				// special case for Story Mode

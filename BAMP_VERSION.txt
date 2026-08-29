@@ -1,5 +1,7 @@
 VPWStudio BAMP Edition
-Version: 0.52
-Assembly version: 0.0.0.52
-Native WM2000 Arena Editor compile repair
-Fix: disambiguate System.Buffer from OpenTK.Graphics.OpenGL.Buffer
+Version: 0.53
+Assembly version: 0.0.0.53
+Native Arena Editor: WM2000 and VPW2
+VPW2 retail FileTable: data 0x00152DF0, index 0x01310F40
+VPW2 arena tables: 0x485BC through 0x486B8
+Project writeback: ProjectFiles/ArenaDefinitions.vpwsarena

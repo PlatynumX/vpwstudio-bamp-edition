@@ -245,6 +245,9 @@
     <Compile Include="Editors\StableDefs_Early.Designer.cs">
       <DependentUpon>StableDefs_Early.cs</DependentUpon>
     </Compile>
+    <Compile Include="Editors\VPW2\ArenaEditor_VPW2.cs">
+      <SubType>Form</SubType>
+    </Compile>
     <Compile Include="Editors\VPW2\Ruleset_VPW2.cs">
       <SubType>Form</SubType>
     </Compile>
@@ -625,6 +628,7 @@
       <DependentUpon>MainForm.cs</DependentUpon>
     </Compile>
     <Compile Include="ProgStructures\WM2KArenaPatchFile.cs" />
+    <Compile Include="ProgStructures\VPW2ArenaPatchFile.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="ProgStructures\Project\ProjectSettings.cs" />
     <Compile Include="ProgStructures\StableDefFile.cs" />
