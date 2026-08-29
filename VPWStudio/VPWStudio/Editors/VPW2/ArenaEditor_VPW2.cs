@@ -7,8 +7,6 @@ using System.Windows.Forms;
 
 using OpenTK;
 using OpenTK.Graphics.OpenGL;
-using OpenTK.Input;
-
 namespace VPWStudio.Editors.VPW2
 {
     /// <summary>
@@ -299,7 +297,7 @@ namespace VPWStudio.Editors.VPW2
             glControl.Load += GlControl_Load;
             glControl.Paint += GlControl_Paint;
             glControl.Resize += delegate { if (validGl) glControl.Invalidate(); };
-            glControl.MouseDown += delegate(object sender, MouseEventArgs e)
+            glControl.MouseDown += delegate(object sender, System.Windows.Forms.MouseEventArgs e)
             {
                 glControl.Focus();
                 dragButton = e.Button;
@@ -1387,7 +1385,7 @@ namespace VPWStudio.Editors.VPW2
 
                 private void GlControl_MouseMove(
             object sender,
-            MouseEventArgs e)
+            System.Windows.Forms.MouseEventArgs e)
         {
             if (dragButton == MouseButtons.None)
             {
@@ -1466,7 +1464,7 @@ namespace VPWStudio.Editors.VPW2
             glControl.Invalidate();
         }
 
-        private void GlControl_MouseWheel(object sender, MouseEventArgs e)
+        private void GlControl_MouseWheel(object sender, System.Windows.Forms.MouseEventArgs e)
         {
             cameraDistance *= e.Delta > 0 ? 0.88f : 1.14f;
             cameraDistance = Math.Max(80f, Math.Min(30000f, cameraDistance));
