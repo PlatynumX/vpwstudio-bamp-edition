@@ -158,6 +158,17 @@ namespace VPWStudio.Editors.VPW2
             left.Controls.Add(viewButtons);
             y += 66;
 
+            // BAMP_N64_CONTROL_HINT
+            Label n64ControlHint = new Label();
+            n64ControlHint.Text =
+                "N64 pad: Stick move | C-L/R orbit | C-U/D zoom | " +
+                "L/R height | Z fine | Start hard cam";
+            n64ControlHint.Width = 356;
+            n64ControlHint.Height = 34;
+            n64ControlHint.Location = new Point(8, y);
+            left.Controls.Add(n64ControlHint);
+            y += 38;
+
             FlowLayoutPanel flags = new FlowLayoutPanel();
             flags.Location = new Point(8, y);
             flags.Width = 356;
@@ -1537,28 +1548,60 @@ namespace VPWStudio.Editors.VPW2
                 return;
             }
 
-            float leftX =
+            // BAMP_N64_VIEW_CONTROLS
+            // N64-oriented layout for common USB/XInput adapters:
+            //   Control Stick   = move/pan across the arena floor
+            //   C-Left/Right   = orbit camera left/right
+            //   C-Up/Down      = zoom in/out
+            //   L / R          = lower / raise camera target
+            //   Z              = precision modifier when mapped as a trigger
+            //   Start          = return to the game's hard camera
+            // Most modern N64 adapters expose the four C buttons as the
+            // right-stick cardinal directions, which is why the right stick
+            // is treated as the C-button cluster here instead of as a second
+            // analog stick.
+            float stickX =
                 ApplyGamepadViewDeadzone(
                     state.ThumbSticks.Left.X);
-            float leftY =
+            float stickY =
                 ApplyGamepadViewDeadzone(
                     state.ThumbSticks.Left.Y);
-            float rightX =
+            float cX =
                 ApplyGamepadViewDeadzone(
                     state.ThumbSticks.Right.X);
-            float rightY =
+            float cY =
                 ApplyGamepadViewDeadzone(
                     state.ThumbSticks.Right.Y);
 
-            float zoom =
-                state.Triggers.Right -
-                state.Triggers.Left;
+            bool lHeld =
+                state.Buttons.LeftShoulder ==
+                OpenTK.Input.ButtonState.Pressed;
+            bool rHeld =
+                state.Buttons.RightShoulder ==
+                OpenTK.Input.ButtonState.Pressed;
+            bool startHeld =
+                state.Buttons.Start ==
+                OpenTK.Input.ButtonState.Pressed;
 
-            if (Math.Abs(leftX) < 0.0001f &&
-                Math.Abs(leftY) < 0.0001f &&
-                Math.Abs(rightX) < 0.0001f &&
-                Math.Abs(rightY) < 0.0001f &&
-                Math.Abs(zoom) < 0.015f)
+            if (startHeld)
+            {
+                SetHardCamera();
+                return;
+            }
+
+            float precision =
+                Math.Max(
+                    state.Triggers.Left,
+                    state.Triggers.Right) >= 0.35f
+                    ? 0.32f
+                    : 1f;
+
+            if (Math.Abs(stickX) < 0.0001f &&
+                Math.Abs(stickY) < 0.0001f &&
+                Math.Abs(cX) < 0.0001f &&
+                Math.Abs(cY) < 0.0001f &&
+                !lHeld &&
+                !rHeld)
             {
                 return;
             }
@@ -1568,19 +1611,30 @@ namespace VPWStudio.Editors.VPW2
                     0.001f,
                     gamepadViewTimer.Interval / 1000f);
 
-            // Right stick: orbit.
+            // C-Left / C-Right: orbit around the current target.
             cameraYaw +=
-                rightX * 115f * deltaSeconds;
+                cX * 120f * deltaSeconds * precision;
 
-            cameraPitch +=
-                rightY * 90f * deltaSeconds;
+            // C-Up / C-Down: zoom toward / away from the target.
+            if (Math.Abs(cY) >= 0.0001f)
+            {
+                float zoomSpeed =
+                    Math.Max(
+                        650f,
+                        cameraDistance * 1.65f);
 
-            cameraPitch =
-                Math.Max(
-                    -85f,
-                    Math.Min(85f, cameraPitch));
+                cameraDistance -=
+                    cY * zoomSpeed * deltaSeconds * precision;
 
-            // Left stick: pan target in view space.
+                cameraDistance =
+                    Math.Max(
+                        80f,
+                        Math.Min(
+                            30000f,
+                            cameraDistance));
+            }
+
+            // Control Stick: move the target across the arena floor.
             Vector3 eye = GetCameraPosition();
             Vector3 flatForward =
                 cameraTarget - eye;
@@ -1599,38 +1653,31 @@ namespace VPWStudio.Editors.VPW2
                 {
                     right.Normalize();
 
-                    float panSpeed =
+                    float moveSpeed =
                         Math.Max(
                             220f,
                             cameraDistance * 0.70f);
 
                     cameraTarget +=
                         right *
-                        (leftX * panSpeed * deltaSeconds);
+                        (stickX * moveSpeed * deltaSeconds * precision);
 
                     cameraTarget +=
-                        Vector3.UnitY *
-                        (leftY * panSpeed * deltaSeconds);
+                        flatForward *
+                        (stickY * moveSpeed * deltaSeconds * precision);
+
+                    // N64 L/R shoulder buttons change camera height.
+                    float height =
+                        (rHeld ? 1f : 0f) -
+                        (lHeld ? 1f : 0f);
+
+                    if (Math.Abs(height) > 0.001f)
+                    {
+                        cameraTarget +=
+                            Vector3.UnitY *
+                            (height * moveSpeed * deltaSeconds * precision);
+                    }
                 }
-            }
-
-            // RT zooms in, LT zooms out.
-            if (Math.Abs(zoom) >= 0.015f)
-            {
-                float zoomSpeed =
-                    Math.Max(
-                        650f,
-                        cameraDistance * 1.65f);
-
-                cameraDistance -=
-                    zoom * zoomSpeed * deltaSeconds;
-
-                cameraDistance =
-                    Math.Max(
-                        80f,
-                        Math.Min(
-                            30000f,
-                            cameraDistance));
             }
 
             glControl.Invalidate();
