@@ -7,6 +7,7 @@ using System.Windows.Forms;
 
 using OpenTK;
 using OpenTK.Graphics.OpenGL;
+using OpenTK.Input;
 
 namespace VPWStudio.Editors.VPW2
 {
@@ -67,6 +68,12 @@ namespace VPWStudio.Editors.VPW2
         private float cameraDistance = 4300f;
         private Point mouseLast;
         private MouseButtons dragButton = MouseButtons.None;
+
+        // BAMP_GAMEPAD_VIEW_CONTROLS
+        private readonly System.Windows.Forms.Timer gamepadViewTimer =
+            new System.Windows.Forms.Timer();
+        private int gamepadViewIndex = -1;
+        private const float GamepadViewDeadzone = 0.18f;
 
         private readonly SortedDictionary<UInt32, VPW2ArenaTranslation>
             transforms =
@@ -301,7 +308,15 @@ namespace VPWStudio.Editors.VPW2
             glControl.MouseUp += delegate { dragButton = MouseButtons.None; };
             glControl.MouseMove += GlControl_MouseMove;
             glControl.MouseWheel += GlControl_MouseWheel;
-            FormClosed += delegate { DestroyGlTextures(); };
+
+            gamepadViewTimer.Interval = 16;
+            gamepadViewTimer.Tick += GamepadViewTimer_Tick;
+            gamepadViewTimer.Start();
+            FormClosed += delegate
+            {
+                gamepadViewTimer.Stop();
+                DestroyGlTextures();
+            };
         }
 
         private static void AddButton(Control parent, string text, EventHandler handler)
@@ -1455,6 +1470,171 @@ namespace VPWStudio.Editors.VPW2
         {
             cameraDistance *= e.Delta > 0 ? 0.88f : 1.14f;
             cameraDistance = Math.Max(80f, Math.Min(30000f, cameraDistance));
+            glControl.Invalidate();
+        }
+
+
+        private static float ApplyGamepadViewDeadzone(float value)
+        {
+            float absolute = Math.Abs(value);
+
+            if (absolute <= GamepadViewDeadzone)
+            {
+                return 0f;
+            }
+
+            float normalized =
+                (absolute - GamepadViewDeadzone) /
+                (1f - GamepadViewDeadzone);
+
+            return Math.Sign(value) * normalized;
+        }
+
+        private void GamepadViewTimer_Tick(
+            object sender,
+            EventArgs e)
+        {
+            if (!Visible ||
+                WindowState == FormWindowState.Minimized ||
+                !ContainsFocus)
+            {
+                return;
+            }
+
+            OpenTK.Input.GamePadState state =
+                default(OpenTK.Input.GamePadState);
+
+            bool connected = false;
+
+            if (gamepadViewIndex >= 0)
+            {
+                state =
+                    OpenTK.Input.GamePad.GetState(
+                        gamepadViewIndex);
+
+                connected = state.IsConnected;
+            }
+
+            if (!connected)
+            {
+                gamepadViewIndex = -1;
+
+                for (int i = 0; i < 4; i++)
+                {
+                    OpenTK.Input.GamePadState candidate =
+                        OpenTK.Input.GamePad.GetState(i);
+
+                    if (candidate.IsConnected)
+                    {
+                        gamepadViewIndex = i;
+                        state = candidate;
+                        connected = true;
+                        break;
+                    }
+                }
+            }
+
+            if (!connected)
+            {
+                return;
+            }
+
+            float leftX =
+                ApplyGamepadViewDeadzone(
+                    state.ThumbSticks.Left.X);
+            float leftY =
+                ApplyGamepadViewDeadzone(
+                    state.ThumbSticks.Left.Y);
+            float rightX =
+                ApplyGamepadViewDeadzone(
+                    state.ThumbSticks.Right.X);
+            float rightY =
+                ApplyGamepadViewDeadzone(
+                    state.ThumbSticks.Right.Y);
+
+            float zoom =
+                state.Triggers.Right -
+                state.Triggers.Left;
+
+            if (Math.Abs(leftX) < 0.0001f &&
+                Math.Abs(leftY) < 0.0001f &&
+                Math.Abs(rightX) < 0.0001f &&
+                Math.Abs(rightY) < 0.0001f &&
+                Math.Abs(zoom) < 0.015f)
+            {
+                return;
+            }
+
+            float deltaSeconds =
+                Math.Max(
+                    0.001f,
+                    gamepadViewTimer.Interval / 1000f);
+
+            // Right stick: orbit.
+            cameraYaw +=
+                rightX * 115f * deltaSeconds;
+
+            cameraPitch +=
+                rightY * 90f * deltaSeconds;
+
+            cameraPitch =
+                Math.Max(
+                    -85f,
+                    Math.Min(85f, cameraPitch));
+
+            // Left stick: pan target in view space.
+            Vector3 eye = GetCameraPosition();
+            Vector3 flatForward =
+                cameraTarget - eye;
+            flatForward.Y = 0f;
+
+            if (flatForward.Length > 0.001f)
+            {
+                flatForward.Normalize();
+
+                Vector3 right =
+                    Vector3.Cross(
+                        flatForward,
+                        Vector3.UnitY);
+
+                if (right.Length > 0.001f)
+                {
+                    right.Normalize();
+
+                    float panSpeed =
+                        Math.Max(
+                            220f,
+                            cameraDistance * 0.70f);
+
+                    cameraTarget +=
+                        right *
+                        (leftX * panSpeed * deltaSeconds);
+
+                    cameraTarget +=
+                        Vector3.UnitY *
+                        (leftY * panSpeed * deltaSeconds);
+                }
+            }
+
+            // RT zooms in, LT zooms out.
+            if (Math.Abs(zoom) >= 0.015f)
+            {
+                float zoomSpeed =
+                    Math.Max(
+                        650f,
+                        cameraDistance * 1.65f);
+
+                cameraDistance -=
+                    zoom * zoomSpeed * deltaSeconds;
+
+                cameraDistance =
+                    Math.Max(
+                        80f,
+                        Math.Min(
+                            30000f,
+                            cameraDistance));
+            }
+
             glControl.Invalidate();
         }
 

@@ -10,7 +10,7 @@ namespace VPWStudio
 	/// todo: these should really be in the per-language Resources
 	public static class SharedStrings
 	{
-		public const string BampVersion = "0.54";
+		public const string BampVersion = "0.55";
         public static string MainForm_Title = "VPWStudio BAMP Version " + BampVersion;
 
 		#region Save/Load Dialog Filter Strings

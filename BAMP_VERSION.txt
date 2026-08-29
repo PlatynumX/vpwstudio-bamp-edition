@@ -1,10 +1,1 @@
-VPWStudio BAMP Edition
-Version: 0.54
-Assembly version: 0.0.0.54
-VPW2 Arena Editor: per-instance X/Y/Z movement
-Shared FileTable models are not modified
-Arena-loader call hook: ROM 0x00010E00
-Arena trampoline cave: ROM 0x0000103C (36 verified zero bytes)
-Runtime helper cave: ROM 0x00037D34 (108 verified zero bytes)
-Runtime movement table: ROM 0x01FF0000 (final 64 KiB reservation)
-Project movement file: ProjectFiles/ArenaTransforms.vpwsmove
+0.55
