@@ -1,7 +1,5 @@
 VPWStudio BAMP Edition
-Version: 0.51
-Assembly version: 0.0.0.51
-Native WM2000 Arena Editor: enabled
-Renderer/parser ported from WM2000 Arena Studio Proof 10
-No browser, WebView, Three.js, or CDN dependency
-Project writeback: ProjectFiles/ArenaDefinitions.vpwsarena
+Version: 0.52
+Assembly version: 0.0.0.52
+Native WM2000 Arena Editor compile repair
+Fix: disambiguate System.Buffer from OpenTK.Graphics.OpenGL.Buffer

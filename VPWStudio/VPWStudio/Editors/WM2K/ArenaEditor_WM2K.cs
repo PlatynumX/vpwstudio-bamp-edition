@@ -683,7 +683,7 @@ namespace VPWStudio.Editors.WM2K
                 throw new InvalidDataException("Invalid FileTable range for " + fileId.ToString("X4"));
 
             byte[] stored = new byte[end - start];
-            Buffer.BlockCopy(workingRom, start, stored, 0, stored.Length);
+            System.Buffer.BlockCopy(workingRom, start, stored, 0, stored.Length);
             return (a & 1) != 0 ? LzssDecode(stored) : stored;
         }
 
