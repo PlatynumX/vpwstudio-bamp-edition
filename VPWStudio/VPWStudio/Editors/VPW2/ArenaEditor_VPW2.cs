@@ -26,13 +26,15 @@ namespace VPWStudio.Editors.VPW2
             "Arena Zero"
         };
 
-        private const int RingModelPtrTable = 0x485BC;
-        private const int RingMaterialPtrTable = 0x485D4;
-        private const int RingBlockModelPtrTable = 0x485F8;
-        private const int RingBlockMaterialPtrTable = 0x48610;
-        private const int MainCountTable = 0x48628;
-        private const int MainModelPtrTable = 0x48634;
-        private const int MainMaterialPtrTable = 0x4864C;
+        private const int RingMatModelPtrTable = 0x485BC;
+        private const int RingMatMaterialPtrTable = 0x485D4;
+        private const int RingMatCountTable = 0x485EC;
+        private const int RingAreaModelPtrTable = 0x485F8;
+        private const int RingAreaMaterialPtrTable = 0x48610;
+        private const int RingAreaCountTable = 0x48628;
+        private const int OutsideRingModelPtrTable = 0x48634;
+        private const int OutsideRingMaterialPtrTable = 0x4864C;
+        private const int OutsideRingCountTable = 0x48664;
         private const int SectionCountPtrTable = 0x48670;
         private const int SectionModelPtrTable = 0x48688;
         private const int SectionMaterial1PtrTable = 0x486A0;
@@ -65,6 +67,15 @@ namespace VPWStudio.Editors.VPW2
         private float cameraDistance = 4300f;
         private Point mouseLast;
         private MouseButtons dragButton = MouseButtons.None;
+
+        private readonly SortedDictionary<UInt32, VPW2ArenaTranslation>
+            transforms =
+                new SortedDictionary<UInt32, VPW2ArenaTranslation>();
+        private ArenaPart selectedPart = null;
+        private readonly CheckBox moveSelectedMode = new CheckBox();
+        private readonly ComboBox moveAxis = new ComboBox();
+        private readonly NumericUpDown moveStep = new NumericUpDown();
+
 
                 public ArenaEditor_VPW2()
         {
@@ -167,15 +178,53 @@ namespace VPWStudio.Editors.VPW2
             left.Controls.Add(flags);
             y += 52;
 
+            FlowLayoutPanel movePanel = new FlowLayoutPanel();
+            movePanel.Location = new Point(8, y);
+            movePanel.Width = 356;
+            movePanel.Height = 56;
+            movePanel.WrapContents = true;
+
+            moveSelectedMode.Text = "Move selected in preview";
+            moveSelectedMode.AutoSize = true;
+
+            Label axisLabel = new Label();
+            axisLabel.Text = "Axis:";
+            axisLabel.AutoSize = true;
+            axisLabel.Padding = new Padding(3, 6, 0, 0);
+
+            moveAxis.DropDownStyle = ComboBoxStyle.DropDownList;
+            moveAxis.Width = 48;
+            moveAxis.Items.AddRange(new object[] { "X", "Y", "Z" });
+            moveAxis.SelectedIndex = 0;
+
+            Label stepLabel = new Label();
+            stepLabel.Text = "Step:";
+            stepLabel.AutoSize = true;
+            stepLabel.Padding = new Padding(3, 6, 0, 0);
+
+            moveStep.Minimum = 1;
+            moveStep.Maximum = 1000;
+            moveStep.Value = 1;
+            moveStep.Width = 62;
+
+            movePanel.Controls.Add(moveSelectedMode);
+            movePanel.Controls.Add(axisLabel);
+            movePanel.Controls.Add(moveAxis);
+            movePanel.Controls.Add(stepLabel);
+            movePanel.Controls.Add(moveStep);
+            left.Controls.Add(movePanel);
+            y += 60;
+
             Label hint = new Label();
             hint.Text =
-                "Edit VPW2 ring, main-object and venue-section Model/Material IDs. " +
-                "Edits are saved to the project and applied by Build ROM.";
+                "Select a row, enable Move selected, choose X/Y/Z, then " +
+                "drag LMB in the 3D preview. X/Y/Z cells also accept exact " +
+                "signed values. Build ROM patches only that arena occurrence.";
             hint.Width = 356;
-            hint.Height = 48;
+            hint.Height = 68;
             hint.Location = new Point(8, y);
             left.Controls.Add(hint);
-            y += 52;
+            y += 72;
 
             objectGrid.Location = new Point(8, y);
             objectGrid.Width = 356;
@@ -198,9 +247,13 @@ namespace VPWStudio.Editors.VPW2
             objectGrid.Columns.Add(MakeTextColumn("Model", "Model", 54, false));
             objectGrid.Columns.Add(MakeTextColumn("Material", "Mat", 54, false));
             objectGrid.Columns.Add(MakeTextColumn("Triangles", "Tri", 42, true));
+            objectGrid.Columns.Add(MakeTextColumn("MoveX", "X", 52, false));
+            objectGrid.Columns.Add(MakeTextColumn("MoveY", "Y", 52, false));
+            objectGrid.Columns.Add(MakeTextColumn("MoveZ", "Z", 52, false));
             objectGrid.CellBeginEdit += ObjectGrid_CellBeginEdit;
             objectGrid.CellEndEdit += ObjectGrid_CellEndEdit;
             objectGrid.CellValueChanged += ObjectGrid_CellValueChanged;
+            objectGrid.SelectionChanged += ObjectGrid_SelectionChanged;
             objectGrid.CurrentCellDirtyStateChanged += delegate
             {
                 if (objectGrid.IsCurrentCellDirty)
@@ -272,11 +325,12 @@ namespace VPWStudio.Editors.VPW2
             return column;
         }
 
-        private void LoadProjectArenaEdits()
+                private void LoadProjectArenaEdits()
         {
             baseRom = (byte[])Program.CurrentInputROM.Data.Clone();
             workingRom = (byte[])baseRom.Clone();
             edits.Clear();
+            transforms.Clear();
 
             SortedDictionary<UInt32, UInt16> loaded =
                 VPW2ArenaPatchFile.LoadForCurrentProject(baseRom);
@@ -287,11 +341,27 @@ namespace VPWStudio.Editors.VPW2
                 WriteU16(workingRom, checked((int)edit.Key), edit.Value);
             }
 
+            SortedDictionary<UInt32, VPW2ArenaTranslation> loadedMoves =
+                VPW2ArenaTransformFile.LoadForCurrentProject(baseRom);
+
+            foreach (
+                KeyValuePair<UInt32, VPW2ArenaTranslation> move
+                in loadedMoves)
+            {
+                transforms[move.Key] =
+                    new VPW2ArenaTranslation(
+                        move.Key,
+                        move.Value.X,
+                        move.Value.Y,
+                        move.Value.Z);
+            }
+
             profile = DetectProfile(workingRom);
             status.Text = String.Format(
-                "{0}\r\n{1} saved arena edits loaded.",
+                "{0}\r\n{1} table edits, {2} moved objects loaded.",
                 profile.Name,
-                edits.Count);
+                edits.Count,
+                transforms.Count);
         }
 
                 private ArenaProfile DetectProfile(byte[] rom)
@@ -333,19 +403,27 @@ namespace VPWStudio.Editors.VPW2
                 "Unsupported VPW2 FileTable/profile.");
         }
 
-        private void SaveArenaEdits()
+                private void SaveArenaEdits()
         {
             try
             {
                 VPW2ArenaPatchFile.SaveForCurrentProject(baseRom, edits);
+                VPW2ArenaTransformFile.SaveForCurrentProject(
+                    baseRom,
+                    transforms);
+
                 Program.UnsavedChanges = true;
                 status.Text = String.Format(
-                    "Saved {0} arena edits to\r\n{1}",
+                    "Saved {0} table edits and {1} moved objects.",
                     edits.Count,
-                    VPW2ArenaPatchFile.GetProjectPath(false));
+                    transforms.Count);
+
                 Program.InfoMessageBox(String.Format(
-                    "Saved {0} VPW2 arena edits.\n\nBuild ROM will apply them to the output ROM.",
-                    edits.Count));
+                    "Saved {0} VPW2 arena table edits and {1} per-instance " +
+                    "translations.\n\nBuild ROM will install the runtime " +
+                    "movement table without changing shared model files.",
+                    edits.Count,
+                    transforms.Count));
             }
             catch (Exception exception)
             {
@@ -353,7 +431,7 @@ namespace VPWStudio.Editors.VPW2
             }
         }
 
-                private void BuildScene()
+                        private void BuildScene()
         {
             if (workingRom == null ||
                 currentArena < 0 ||
@@ -365,100 +443,53 @@ namespace VPWStudio.Editors.VPW2
             DestroyGlTextures();
             textureCache.Clear();
             parts.Clear();
+            selectedPart = null;
 
             try
             {
                 int arena = currentArena;
 
-                int ringModels = PtrToRom(
-                    ReadU32(
-                        workingRom,
-                        RingModelPtrTable + arena * 4));
-                int ringMaterials = PtrToRom(
-                    ReadU32(
-                        workingRom,
-                        RingMaterialPtrTable + arena * 4));
-
-                AddVpw2Part(
+                AddVpw2LinearGroup(
                     "Ring",
                     "Ring mat",
-                    ringModels,
-                    ringMaterials,
-                    -1,
-                    true,
-                    true);
-
-                int ringBlockModels = PtrToRom(
-                    ReadU32(
+                    PtrToRom(ReadU32(
                         workingRom,
-                        RingBlockModelPtrTable + arena * 4));
-                int ringBlockMaterials = PtrToRom(
-                    ReadU32(
+                        RingMatModelPtrTable + arena * 4)),
+                    PtrToRom(ReadU32(
                         workingRom,
-                        RingBlockMaterialPtrTable + arena * 4));
-
-                if (ringBlockModels >= 0 &&
-                    ringBlockMaterials > ringBlockModels)
-                {
-                    int count =
-                        (ringBlockMaterials - ringBlockModels) / 2;
-
-                    if (count < 1 || count > 32)
-                    {
-                        throw new InvalidDataException(
-                            "VPW2 ring/apron block size is invalid.");
-                    }
-
-                    for (int i = 0; i < count; i++)
-                    {
-                        AddVpw2Part(
-                            "Ring",
-                            String.Format(
-                                "Ring/apron {0:00}",
-                                i),
-                            ringBlockModels + i * 2,
-                            ringBlockMaterials + i * 2,
-                            -1,
-                            true,
-                            true);
-                    }
-                }
-
-                int mainCount =
+                        RingMatMaterialPtrTable + arena * 4)),
                     ReadU16(
                         workingRom,
-                        MainCountTable + arena * 2);
-                int mainModels = PtrToRom(
-                    ReadU32(
-                        workingRom,
-                        MainModelPtrTable + arena * 4));
-                int mainMaterials = PtrToRom(
-                    ReadU32(
-                        workingRom,
-                        MainMaterialPtrTable + arena * 4));
+                        RingMatCountTable + arena * 2),
+                    8);
 
-                if (mainCount < 0 ||
-                    mainCount > 64 ||
-                    mainModels < 0 ||
-                    mainMaterials < 0)
-                {
-                    throw new InvalidDataException(
-                        "VPW2 main arena object table is invalid.");
-                }
+                AddVpw2LinearGroup(
+                    "Ring",
+                    "Ring area",
+                    PtrToRom(ReadU32(
+                        workingRom,
+                        RingAreaModelPtrTable + arena * 4)),
+                    PtrToRom(ReadU32(
+                        workingRom,
+                        RingAreaMaterialPtrTable + arena * 4)),
+                    ReadU16(
+                        workingRom,
+                        RingAreaCountTable + arena * 2),
+                    64);
 
-                for (int i = 0; i < mainCount; i++)
-                {
-                    AddVpw2Part(
-                        "Main",
-                        String.Format(
-                            "Main object {0:00}",
-                            i),
-                        mainModels + i * 2,
-                        mainMaterials + i * 2,
-                        -1,
-                        true,
-                        true);
-                }
+                AddVpw2LinearGroup(
+                    "Outside",
+                    "Outside ring",
+                    PtrToRom(ReadU32(
+                        workingRom,
+                        OutsideRingModelPtrTable + arena * 4)),
+                    PtrToRom(ReadU32(
+                        workingRom,
+                        OutsideRingMaterialPtrTable + arena * 4)),
+                    ReadU16(
+                        workingRom,
+                        OutsideRingCountTable + arena * 2),
+                    64);
 
                 int sectionCounts = PtrToRom(
                     ReadU32(
@@ -483,7 +514,7 @@ namespace VPWStudio.Editors.VPW2
                     sectionMat2Pointers < 0)
                 {
                     throw new InvalidDataException(
-                        "VPW2 venue section pointers are invalid.");
+                        "VPW2 venue-section pointers are invalid.");
                 }
 
                 string[] sectionNames =
@@ -496,13 +527,10 @@ namespace VPWStudio.Editors.VPW2
 
                 for (int section = 0; section < 4; section++)
                 {
-                    int count =
-                        workingRom[sectionCounts + section];
-
-                    if (count < 0 || count > 64)
+                    int count = workingRom[sectionCounts + section];
+                    if (count <= 0 || count > 64)
                     {
-                        throw new InvalidDataException(
-                            "VPW2 venue section count is invalid.");
+                        continue;
                     }
 
                     int models = PtrToRom(
@@ -518,9 +546,7 @@ namespace VPWStudio.Editors.VPW2
                             workingRom,
                             sectionMat2Pointers + section * 4));
 
-                    if (models < 0 ||
-                        mats1 < 0 ||
-                        mats2 < 0)
+                    if (models < 0 || mats1 < 0 || mats2 < 0)
                     {
                         continue;
                     }
@@ -544,11 +570,11 @@ namespace VPWStudio.Editors.VPW2
                 PopulateObjectGrid();
 
                 status.Text = String.Format(
-                    "{0}\r\n{1}: {2} draws, {3} project edits.",
+                    "{0}\r\n{1}: {2} draws, {3} moved objects.",
                     profile.Name,
                     ArenaNames[currentArena],
                     parts.Count,
-                    edits.Count);
+                    transforms.Count);
 
                 glControl.Invalidate();
             }
@@ -557,6 +583,35 @@ namespace VPWStudio.Editors.VPW2
                 status.Text =
                     "VPW2 arena parse error:\r\n" +
                     exception.Message;
+            }
+        }
+
+        private void AddVpw2LinearGroup(
+            string group,
+            string namePrefix,
+            int models,
+            int materials,
+            int count,
+            int maximum)
+        {
+            if (models < 0 ||
+                materials < 0 ||
+                count <= 0 ||
+                count > maximum)
+            {
+                return;
+            }
+
+            for (int i = 0; i < count; i++)
+            {
+                AddVpw2Part(
+                    group,
+                    String.Format("{0} {1:00}", namePrefix, i),
+                    models + i * 2,
+                    materials + i * 2,
+                    -1,
+                    true,
+                    true);
             }
         }
 
@@ -645,6 +700,20 @@ namespace VPWStudio.Editors.VPW2
                 part.Texture = GetTexture(materialId);
                 part.RotationY = rotationY;
                 part.Visible = true;
+
+                if (modelOffset >= 0)
+                {
+                    VPW2ArenaTranslation move;
+                    if (transforms.TryGetValue(
+                        (UInt32)modelOffset,
+                        out move))
+                    {
+                        part.MoveX = move.X;
+                        part.MoveY = move.Y;
+                        part.MoveZ = move.Z;
+                    }
+                }
+
                 parts.Add(part);
             }
             catch (Exception)
@@ -667,7 +736,10 @@ namespace VPWStudio.Editors.VPW2
                         part.Name,
                         part.ModelId.ToString("X4"),
                         part.MaterialId.ToString("X4"),
-                        part.Model.Indices.Count / 3);
+                        part.Model.Indices.Count / 3,
+                        part.MoveX,
+                        part.MoveY,
+                        part.MoveZ);
                     DataGridViewRow row = objectGrid.Rows[index];
                     row.Tag = part;
                     if (!part.ModelEditable)
@@ -680,6 +752,15 @@ namespace VPWStudio.Editors.VPW2
                         row.Cells["Material"].ReadOnly = true;
                         row.Cells["Material"].Style.ForeColor = SystemColors.GrayText;
                     }
+                    if (part.ModelOffset < 0)
+                    {
+                        row.Cells["MoveX"].ReadOnly = true;
+                        row.Cells["MoveY"].ReadOnly = true;
+                        row.Cells["MoveZ"].ReadOnly = true;
+                        row.Cells["MoveX"].Style.ForeColor = SystemColors.GrayText;
+                        row.Cells["MoveY"].Style.ForeColor = SystemColors.GrayText;
+                        row.Cells["MoveZ"].Style.ForeColor = SystemColors.GrayText;
+                    }
                 }
             }
             finally
@@ -688,50 +769,114 @@ namespace VPWStudio.Editors.VPW2
             }
         }
 
-        private void ObjectGrid_CellBeginEdit(object sender, DataGridViewCellCancelEventArgs e)
+                private void ObjectGrid_CellBeginEdit(
+            object sender,
+            DataGridViewCellCancelEventArgs e)
         {
-            if (e.RowIndex < 0) return;
-            ArenaPart part = objectGrid.Rows[e.RowIndex].Tag as ArenaPart;
+            if (e.RowIndex < 0)
+            {
+                return;
+            }
+
+            ArenaPart part =
+                objectGrid.Rows[e.RowIndex].Tag as ArenaPart;
             if (part == null)
             {
                 e.Cancel = true;
                 return;
             }
-            string column = objectGrid.Columns[e.ColumnIndex].Name;
-            if (column == "Model" && !part.ModelEditable) e.Cancel = true;
-            if (column == "Material" && !part.MaterialEditable) e.Cancel = true;
+
+            string column =
+                objectGrid.Columns[e.ColumnIndex].Name;
+
+            if (column == "Model" && !part.ModelEditable)
+            {
+                e.Cancel = true;
+            }
+            else if (column == "Material" && !part.MaterialEditable)
+            {
+                e.Cancel = true;
+            }
+            else if ((column == "MoveX" ||
+                      column == "MoveY" ||
+                      column == "MoveZ") &&
+                     part.ModelOffset < 0)
+            {
+                e.Cancel = true;
+            }
         }
 
-        private void ObjectGrid_CellEndEdit(object sender, DataGridViewCellEventArgs e)
+                private void ObjectGrid_CellEndEdit(
+            object sender,
+            DataGridViewCellEventArgs e)
         {
-            if (updatingGrid || e.RowIndex < 0) return;
-            ArenaPart part = objectGrid.Rows[e.RowIndex].Tag as ArenaPart;
-            if (part == null) return;
-            string column = objectGrid.Columns[e.ColumnIndex].Name;
+            if (updatingGrid || e.RowIndex < 0)
+            {
+                return;
+            }
+
+            ArenaPart part =
+                objectGrid.Rows[e.RowIndex].Tag as ArenaPart;
+            if (part == null)
+            {
+                return;
+            }
+
+            string column =
+                objectGrid.Columns[e.ColumnIndex].Name;
 
             try
             {
                 if (column == "Model" && part.ModelEditable)
                 {
-                    UInt16 value = ParseHex16(objectGrid.Rows[e.RowIndex].Cells[e.ColumnIndex].Value);
+                    UInt16 value = ParseHex16(
+                        objectGrid.Rows[e.RowIndex]
+                            .Cells[e.ColumnIndex].Value);
                     if (value == 0 || value > profile.Count)
-                        throw new InvalidDataException("Model File ID is outside the project FileTable.");
+                    {
+                        throw new InvalidDataException(
+                            "Model File ID is outside the project FileTable.");
+                    }
                     ApplyHalfwordEdit(part.ModelOffset, value);
                     BuildScene();
                 }
                 else if (column == "Material" && part.MaterialEditable)
                 {
-                    UInt16 value = ParseHex16(objectGrid.Rows[e.RowIndex].Cells[e.ColumnIndex].Value);
+                    UInt16 value = ParseHex16(
+                        objectGrid.Rows[e.RowIndex]
+                            .Cells[e.ColumnIndex].Value);
                     if (value == 0 || value + 1 > profile.Count)
-                        throw new InvalidDataException("Material File ID is outside the project FileTable.");
+                    {
+                        throw new InvalidDataException(
+                            "Material File ID is outside the project FileTable.");
+                    }
                     ApplyHalfwordEdit(part.MaterialOffset, value);
                     BuildScene();
+                }
+                else if (column == "MoveX" ||
+                         column == "MoveY" ||
+                         column == "MoveZ")
+                {
+                    Int16 value = ParseSigned16(
+                        objectGrid.Rows[e.RowIndex]
+                            .Cells[e.ColumnIndex].Value);
+
+                    int x = part.MoveX;
+                    int y = part.MoveY;
+                    int z = part.MoveZ;
+
+                    if (column == "MoveX") x = value;
+                    if (column == "MoveY") y = value;
+                    if (column == "MoveZ") z = value;
+
+                    SetPartTranslation(part, x, y, z);
+                    RefreshPartRow(part);
                 }
             }
             catch (Exception exception)
             {
                 Program.ErrorMessageBox(exception.Message);
-                BuildScene();
+                RefreshPartRow(part);
             }
         }
 
@@ -755,6 +900,136 @@ namespace VPWStudio.Editors.VPW2
                     "Refusing unsafe arena edit at 0x{0:X8}.", offset));
             WriteU16(workingRom, offset, value);
             edits[(UInt32)offset] = value;
+        }
+
+        private void ObjectGrid_SelectionChanged(
+            object sender,
+            EventArgs e)
+        {
+            selectedPart = null;
+
+            if (objectGrid.SelectedRows.Count > 0)
+            {
+                selectedPart =
+                    objectGrid.SelectedRows[0].Tag as ArenaPart;
+            }
+
+            if (selectedPart != null)
+            {
+                status.Text = String.Format(
+                    "Selected {0} / {1}  Move ({2}, {3}, {4})",
+                    selectedPart.Group,
+                    selectedPart.Name,
+                    selectedPart.MoveX,
+                    selectedPart.MoveY,
+                    selectedPart.MoveZ);
+            }
+        }
+
+        private static Int16 ParseSigned16(object value)
+        {
+            Int16 result;
+            if (!Int16.TryParse(
+                Convert.ToString(value).Trim(),
+                out result))
+            {
+                throw new FormatException(
+                    "Enter a signed 16-bit movement value (-32768..32767).");
+            }
+            return result;
+        }
+
+        private void SetPartTranslation(
+            ArenaPart part,
+            int x,
+            int y,
+            int z)
+        {
+            if (part == null || part.ModelOffset < 0)
+            {
+                throw new InvalidOperationException(
+                    "That draw does not have a unique per-arena model-list entry.");
+            }
+
+            if (x < Int16.MinValue || x > Int16.MaxValue ||
+                y < Int16.MinValue || y > Int16.MaxValue ||
+                z < Int16.MinValue || z > Int16.MaxValue)
+            {
+                throw new InvalidDataException(
+                    "Movement delta exceeds signed 16-bit runtime range.");
+            }
+
+            foreach (ArenaVertex vertex in part.Model.Vertices)
+            {
+                long movedX = (long)Math.Round(vertex.X) + x;
+                long movedY = (long)Math.Round(vertex.Y) + y;
+                long movedZ = (long)Math.Round(vertex.Z) + z;
+
+                if (movedX < Int16.MinValue || movedX > Int16.MaxValue ||
+                    movedY < Int16.MinValue || movedY > Int16.MaxValue ||
+                    movedZ < Int16.MinValue || movedZ > Int16.MaxValue)
+                {
+                    throw new InvalidDataException(
+                        "This move would overflow a decoded N64 vertex coordinate.");
+                }
+            }
+
+            part.MoveX = x;
+            part.MoveY = y;
+            part.MoveZ = z;
+
+            UInt32 key = (UInt32)part.ModelOffset;
+            if (x == 0 && y == 0 && z == 0)
+            {
+                transforms.Remove(key);
+            }
+            else
+            {
+                transforms[key] =
+                    new VPW2ArenaTranslation(
+                        key,
+                        (Int16)x,
+                        (Int16)y,
+                        (Int16)z);
+            }
+
+            Program.UnsavedChanges = true;
+            glControl.Invalidate();
+        }
+
+        private void RefreshPartRow(ArenaPart part)
+        {
+            if (part == null)
+            {
+                return;
+            }
+
+            updatingGrid = true;
+            try
+            {
+                foreach (DataGridViewRow row in objectGrid.Rows)
+                {
+                    if (Object.ReferenceEquals(row.Tag, part))
+                    {
+                        row.Cells["MoveX"].Value = part.MoveX;
+                        row.Cells["MoveY"].Value = part.MoveY;
+                        row.Cells["MoveZ"].Value = part.MoveZ;
+                        break;
+                    }
+                }
+            }
+            finally
+            {
+                updatingGrid = false;
+            }
+
+            status.Text = String.Format(
+                "Moved {0} / {1} -> ({2}, {3}, {4})",
+                part.Group,
+                part.Name,
+                part.MoveX,
+                part.MoveY,
+                part.MoveZ);
         }
 
         private static UInt16 ParseHex16(object value)
@@ -1002,6 +1277,10 @@ namespace VPWStudio.Editors.VPW2
         {
             EnsureGlTexture(part.Texture);
             GL.PushMatrix();
+            GL.Translate(
+                (double)part.MoveX,
+                (double)part.MoveY,
+                (double)part.MoveZ);
             if (part.RotationY != 0f) GL.Rotate(part.RotationY, 0f, 1f, 0f);
             GL.BindTexture(TextureTarget.Texture2D, part.Texture.GlId);
             GL.Begin(PrimitiveType.Triangles);
@@ -1091,29 +1370,84 @@ namespace VPWStudio.Editors.VPW2
             GL.Enable(EnableCap.Texture2D);
         }
 
-        private void GlControl_MouseMove(object sender, MouseEventArgs e)
+                private void GlControl_MouseMove(
+            object sender,
+            MouseEventArgs e)
         {
-            if (dragButton == MouseButtons.None) return;
+            if (dragButton == MouseButtons.None)
+            {
+                return;
+            }
+
             int dx = e.X - mouseLast.X;
             int dy = e.Y - mouseLast.Y;
             mouseLast = e.Location;
+
+            if (dragButton == MouseButtons.Left &&
+                moveSelectedMode.Checked &&
+                selectedPart != null &&
+                selectedPart.ModelOffset >= 0)
+            {
+                int pixelDelta =
+                    Math.Abs(dx) >= Math.Abs(dy)
+                    ? dx
+                    : -dy;
+
+                if (pixelDelta != 0)
+                {
+                    int amount =
+                        pixelDelta * (int)moveStep.Value;
+                    int x = selectedPart.MoveX;
+                    int y = selectedPart.MoveY;
+                    int z = selectedPart.MoveZ;
+                    string axis = Convert.ToString(moveAxis.SelectedItem);
+
+                    if (axis == "Y") y += amount;
+                    else if (axis == "Z") z += amount;
+                    else x += amount;
+
+                    try
+                    {
+                        SetPartTranslation(
+                            selectedPart,
+                            x,
+                            y,
+                            z);
+                        RefreshPartRow(selectedPart);
+                    }
+                    catch (Exception exception)
+                    {
+                        Program.ErrorMessageBox(exception.Message);
+                        dragButton = MouseButtons.None;
+                    }
+                }
+                return;
+            }
 
             if (dragButton == MouseButtons.Left)
             {
                 cameraYaw += dx * 0.45f;
                 cameraPitch -= dy * 0.35f;
-                cameraPitch = Math.Max(-85f, Math.Min(85f, cameraPitch));
+                cameraPitch = Math.Max(
+                    -85f,
+                    Math.Min(85f, cameraPitch));
             }
             else if (dragButton == MouseButtons.Right)
             {
-                float scale = Math.Max(1f, cameraDistance) / 900f;
+                float scale =
+                    Math.Max(1f, cameraDistance) / 900f;
+
                 Vector3 eye = GetCameraPosition();
                 Vector3 forward = Vector3.Normalize(cameraTarget - eye);
-                Vector3 right = Vector3.Normalize(Vector3.Cross(forward, Vector3.UnitY));
-                Vector3 up = Vector3.Normalize(Vector3.Cross(right, forward));
+                Vector3 right = Vector3.Normalize(
+                    Vector3.Cross(forward, Vector3.UnitY));
+                Vector3 up = Vector3.Normalize(
+                    Vector3.Cross(right, forward));
+
                 cameraTarget -= right * (dx * scale);
                 cameraTarget += up * (dy * scale);
             }
+
             glControl.Invalidate();
         }
 
@@ -1169,13 +1503,16 @@ namespace VPWStudio.Editors.VPW2
                 float sin = (float)Math.Sin(radians);
                 foreach (ArenaVertex vertex in part.Model.Vertices)
                 {
-                    float x = vertex.X * cos + vertex.Z * sin;
-                    float z = -vertex.X * sin + vertex.Z * cos;
+                    float x =
+                        vertex.X * cos + vertex.Z * sin + part.MoveX;
+                    float y = vertex.Y + part.MoveY;
+                    float z =
+                        -vertex.X * sin + vertex.Z * cos + part.MoveZ;
                     min.X = Math.Min(min.X, x);
-                    min.Y = Math.Min(min.Y, vertex.Y);
+                    min.Y = Math.Min(min.Y, y);
                     min.Z = Math.Min(min.Z, z);
                     max.X = Math.Max(max.X, x);
-                    max.Y = Math.Max(max.Y, vertex.Y);
+                    max.Y = Math.Max(max.Y, y);
                     max.Z = Math.Max(max.Z, z);
                     found = true;
                 }
@@ -1293,6 +1630,9 @@ namespace VPWStudio.Editors.VPW2
             public bool MaterialEditable;
             public bool Visible;
             public float RotationY;
+            public int MoveX;
+            public int MoveY;
+            public int MoveZ;
             public CompactModel Model;
             public ArenaTexture Texture;
         }

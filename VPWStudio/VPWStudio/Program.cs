@@ -1654,6 +1654,26 @@ namespace VPWStudio
 			}
 			#endregion
 
+            #region VPW2 Arena Runtime Translations
+            // BAMP_VPW2_ARENA_RUNTIME_TRANSLATIONS
+            if (CurrentProject.Settings.BaseGame == VPWGames.VPW2)
+            {
+                int movedArenaObjects =
+                    VPW2ArenaTransformFile.ApplyRuntimePatch(
+                        outRomData);
+
+                if (movedArenaObjects > 0)
+                {
+                    BuildLogPub.AddLine(
+                        String.Format(
+                            "Installed {0} per-instance VPW2 arena translations.",
+                            movedArenaObjects),
+                        true,
+                        BuildLogEventPublisher.BuildLogVerbosity.Minimal);
+                }
+            }
+            #endregion
+
 			// now put it all together in one big ROM.
 			#region Create Output ROM
 			// determine if the new output ROM is too big to run on console

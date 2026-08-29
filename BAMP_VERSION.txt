@@ -1,7 +1,10 @@
 VPWStudio BAMP Edition
-Version: 0.53
-Assembly version: 0.0.0.53
-Native Arena Editor: WM2000 and VPW2
-VPW2 retail FileTable: data 0x00152DF0, index 0x01310F40
-VPW2 arena tables: 0x485BC through 0x486B8
-Project writeback: ProjectFiles/ArenaDefinitions.vpwsarena
+Version: 0.54
+Assembly version: 0.0.0.54
+VPW2 Arena Editor: per-instance X/Y/Z movement
+Shared FileTable models are not modified
+Arena-loader call hook: ROM 0x00010E00
+Arena trampoline cave: ROM 0x0000103C (36 verified zero bytes)
+Runtime helper cave: ROM 0x00037D34 (108 verified zero bytes)
+Runtime movement table: ROM 0x01FF0000 (final 64 KiB reservation)
+Project movement file: ProjectFiles/ArenaTransforms.vpwsmove
