@@ -214,63 +214,200 @@ namespace VPWStudio
         /// </summary>
         private static bool ReconcileProjectFileTableFromCurrentRom()
         {
-            if (CurrentProject == null || CurrentProject.RomLayout == null || CurrentInputROM == null)
+            if (CurrentProject == null ||
+                CurrentProject.RomLayout == null ||
+                CurrentInputROM == null)
             {
                 return false;
             }
 
-            LocationFileEntry ft = CurrentProject.RomLayout.GetLocationFileEntry(LocationFile.SpecialEntryStrings["FileTable"]);
-            LocationFileEntry ff = CurrentProject.RomLayout.GetLocationFileEntry(LocationFile.SpecialEntryStrings["FirstFile"]);
-            if (ft == null || ff == null || ft.Length <= 0 || (ft.Length & 3) != 0)
+            LocationFileEntry ft =
+                CurrentProject.RomLayout.GetLocationFileEntry(
+                    LocationFile.SpecialEntryStrings["FileTable"]);
+
+            LocationFileEntry ff =
+                CurrentProject.RomLayout.GetLocationFileEntry(
+                    LocationFile.SpecialEntryStrings["FirstFile"]);
+
+            if (ft == null ||
+                ff == null ||
+                ft.Length <= 0 ||
+                (ft.Length & 3) != 0)
             {
                 return false;
             }
 
-            FileTable fresh = new FileTable(ft.Address, ff.Address);
-            using (MemoryStream ms = new MemoryStream(CurrentInputROM.Data))
+            FileTable fresh =
+                new FileTable(ft.Address, ff.Address);
+
+            using (MemoryStream ms =
+                new MemoryStream(CurrentInputROM.Data))
             using (BinaryReader br = new BinaryReader(ms))
             {
                 ms.Seek(ft.Address, SeekOrigin.Begin);
                 fresh.Read(br, ft.Length);
             }
 
-            FileTable old = CurrentProject.ProjectFileTable;
-            bool changed = old == null || old.Location != ft.Address || old.FirstFile != ff.Address ||
-                           old.Entries == null || old.Entries.Count != fresh.Entries.Count;
+            FileTable current =
+                CurrentProject.ProjectFileTable;
 
-            if (old != null && old.Entries != null)
+            // New/empty project: there is no project metadata to preserve.
+            if (current == null ||
+                current.Entries == null ||
+                current.Entries.Count == 0)
             {
-                foreach (KeyValuePair<int, FileTableEntry> pair in fresh.Entries)
+                CurrentProject.ProjectFileTable = fresh;
+                return true;
+            }
+
+            // BAMP_REPLACEMENT_PATH_PRESERVATION
+            //
+            // Do NOT replace ProjectFileTable with a newly allocated table.
+            // Editors can hold FileTableEntry references, and replacement paths
+            // are project state rather than ROM-derived state. Reconcile only
+            // the fields the Base ROM owns: table address, FirstFile, entry
+            // Location, and IsEncoded.
+            Dictionary<int, string> replacementPaths =
+                new Dictionary<int, string>();
+
+            foreach (
+                KeyValuePair<int, FileTableEntry> pair
+                in current.Entries)
+            {
+                string path =
+                    pair.Value == null
+                    ? String.Empty
+                    : pair.Value.ReplaceFilePath;
+
+                if (!String.IsNullOrEmpty(path))
                 {
-                    int id = pair.Key;
-                    FileTableEntry newEntry = pair.Value;
-                    if (!old.Entries.ContainsKey(id))
-                    {
-                        changed = true;
-                        continue;
-                    }
-
-                    FileTableEntry oldEntry = old.Entries[id];
-                    if (oldEntry.Location != newEntry.Location || oldEntry.IsEncoded != newEntry.IsEncoded)
-                    {
-                        changed = true;
-                    }
-
-                    // Preserve all project/editor metadata, but keep ROM-derived Location/IsEncoded.
-                    newEntry.FileType = oldEntry.FileType;
-                    newEntry.Comment = oldEntry.Comment;
-                    newEntry.ProjectSpecificComment = oldEntry.ProjectSpecificComment;
-                    newEntry.ReplaceEncoding = oldEntry.ReplaceEncoding;
-                    newEntry.ReplaceFilePath = oldEntry.ReplaceFilePath;
-                    newEntry.OverrideFileType = oldEntry.OverrideFileType;
-                    newEntry.ExtraData = oldEntry.ExtraData;
+                    replacementPaths[pair.Key] = path;
                 }
             }
 
-            if (changed)
+            bool changed = false;
+
+            if (current.Location != ft.Address)
             {
-                CurrentProject.ProjectFileTable = fresh;
+                current.Location = ft.Address;
+                changed = true;
             }
+
+            if (current.FirstFile != ff.Address)
+            {
+                current.FirstFile = ff.Address;
+                changed = true;
+            }
+
+            foreach (
+                KeyValuePair<int, FileTableEntry> pair
+                in fresh.Entries)
+            {
+                int id = pair.Key;
+                FileTableEntry romEntry = pair.Value;
+
+                if (!current.Entries.ContainsKey(id))
+                {
+                    current.Entries.Add(
+                        id,
+                        new FileTableEntry(romEntry));
+                    changed = true;
+                    continue;
+                }
+
+                FileTableEntry projectEntry =
+                    current.Entries[id];
+
+                if (projectEntry.Location != romEntry.Location)
+                {
+                    projectEntry.Location = romEntry.Location;
+                    changed = true;
+                }
+
+                if (projectEntry.IsEncoded != romEntry.IsEncoded)
+                {
+                    projectEntry.IsEncoded = romEntry.IsEncoded;
+                    changed = true;
+                }
+
+                // Deliberately preserved on the existing object:
+                // FileType, Comment, ProjectSpecificComment, ReplaceEncoding,
+                // ReplaceFilePath, OverrideFileType, ExtraData.
+            }
+
+            // Remove ROM entries that no longer exist only when they carry no
+            // user-owned project state. Never silently discard a replacement.
+            List<int> staleIds = new List<int>();
+
+            foreach (
+                KeyValuePair<int, FileTableEntry> pair
+                in current.Entries)
+            {
+                if (!fresh.Entries.ContainsKey(pair.Key))
+                {
+                    staleIds.Add(pair.Key);
+                }
+            }
+
+            foreach (int id in staleIds)
+            {
+                FileTableEntry entry =
+                    current.Entries[id];
+
+                bool hasUserState =
+                    entry != null &&
+                    (
+                        !String.IsNullOrEmpty(entry.ReplaceFilePath) ||
+                        !String.IsNullOrEmpty(entry.ProjectSpecificComment) ||
+                        entry.OverrideFileType
+                    );
+
+                if (hasUserState)
+                {
+                    throw new InvalidDataException(
+                        String.Format(
+                            "Resolved Base-ROM FileTable no longer contains " +
+                            "FTID {0:X4}, but that project entry has user " +
+                            "metadata/replacement data. Reconciliation was " +
+                            "stopped so the replacement path cannot be lost.",
+                            id));
+                }
+
+                current.Entries.Remove(id);
+                changed = true;
+            }
+
+            // Hard integrity guard: every replacement path present before
+            // reconciliation must still exist exactly unchanged afterward.
+            foreach (
+                KeyValuePair<int, string> saved
+                in replacementPaths)
+            {
+                if (!current.Entries.ContainsKey(saved.Key))
+                {
+                    throw new InvalidDataException(
+                        String.Format(
+                            "Replacement path integrity failure at FTID {0:X4}: " +
+                            "the entry disappeared during reconciliation.",
+                            saved.Key));
+                }
+
+                string after =
+                    current.Entries[saved.Key].ReplaceFilePath;
+
+                if (!String.Equals(
+                    saved.Value,
+                    after,
+                    StringComparison.Ordinal))
+                {
+                    throw new InvalidDataException(
+                        String.Format(
+                            "Replacement path integrity failure at FTID {0:X4}. " +
+                            "Reconciliation refused to alter the saved path.",
+                            saved.Key));
+                }
+            }
+
             return changed;
         }
 
