@@ -522,6 +522,10 @@
     <Compile Include="Editors\VPW2\WrestlerMain_VPW2.cs">
       <SubType>Form</SubType>
     </Compile>
+
+    <Compile Include="Editors\VPW2\WrestlerMain_VPW2.BampThemes.cs">
+      <DependentUpon>WrestlerMain_VPW2.cs</DependentUpon>
+    </Compile>
     <Compile Include="Editors\VPW2\WrestlerMain_VPW2.Designer.cs">
       <DependentUpon>WrestlerMain_VPW2.cs</DependentUpon>
     </Compile>
