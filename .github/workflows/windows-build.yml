@@ -3,6 +3,7 @@ name: Windows Build
 on:
   push:
     branches:
+      - bamp-base-rom
       - main
       - feature/intro-editor
       - feature/texture-transparency-pass1
