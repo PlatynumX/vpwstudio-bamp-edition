@@ -206,6 +206,9 @@ namespace VPWStudio
 		{
 			InitializeComponent();
 
+			// BAMP_FREEM_PNG_REPLACEMENT_COMPAT
+			SetupBampFreemTextureMenus();
+
 			// settings check
 			if (Properties.Settings.Default.GetPreviousVersion("ForceUpgrade") == null)
 			{
@@ -2659,7 +2662,7 @@ namespace VPWStudio
             }
         }
 
-		private void pngToCi4ToolStripMenuItem_Click(object sender, EventArgs e)
+		private void pngToCi4AutoIndexDanger_Click(object sender, EventArgs e)
         {
             OpenFileDialog ofd = new OpenFileDialog();
             ofd.Title = "Convert PNG to CI4";
@@ -2757,7 +2760,7 @@ namespace VPWStudio
             }
         }
 
-		private void pngToCi8ToolStripMenuItem_Click(object sender, EventArgs e)
+		private void pngToCi8AutoIndexDanger_Click(object sender, EventArgs e)
         {
             OpenFileDialog ofd = new OpenFileDialog();
             ofd.Title = "Convert PNG to CI8";
@@ -2854,6 +2857,239 @@ namespace VPWStudio
                         palettePath));
             }
         }
+
+
+		// BAMP_FREEM_PNG_REPLACEMENT_COMPAT
+		//
+		// Normal PNG -> CI replacement conversion deliberately follows freem's
+		// original indexed-image semantics. Palette indices and the indexed bitmap
+		// byte layout are preserved; there is NO automatic requantization here.
+		//
+		// The newer BAMP auto-index/quantize path is still available, but only from
+		// Danger Zone so it cannot silently alter a known-good replacement texture.
+		private void SetupBampFreemTextureMenus()
+		{
+			const string menuName = "bampAutoIndexPngConversionToolStripMenuItem";
+			if (dangerZoneToolStripMenuItem.DropDownItems[menuName] != null)
+			{
+				return;
+			}
+
+			ToolStripMenuItem autoMenu = new ToolStripMenuItem();
+			autoMenu.Name = menuName;
+			autoMenu.Text = "BAMP Auto-index PNG Conversion";
+
+			ToolStripMenuItem autoCi4 = new ToolStripMenuItem();
+			autoCi4.Name = "bampAutoIndexCi4ToolStripMenuItem";
+			autoCi4.Text = "PNG to CI4 (auto-index)";
+			autoCi4.Click += new EventHandler(pngToCi4AutoIndexDanger_Click);
+
+			ToolStripMenuItem autoCi8 = new ToolStripMenuItem();
+			autoCi8.Name = "bampAutoIndexCi8ToolStripMenuItem";
+			autoCi8.Text = "PNG to CI8 (auto-index)";
+			autoCi8.Click += new EventHandler(pngToCi8AutoIndexDanger_Click);
+
+			autoMenu.DropDownItems.Add(autoCi4);
+			autoMenu.DropDownItems.Add(autoCi8);
+
+			dangerZoneToolStripMenuItem.DropDownItems.Add(new ToolStripSeparator());
+			dangerZoneToolStripMenuItem.DropDownItems.Add(autoMenu);
+		}
+
+		private static byte BampFreemTextureBitLength(int dimension)
+		{
+			int temp = dimension - 1;
+			int length = 0;
+			do
+			{
+				length++;
+			}
+			while ((temp >>= 1) != 0);
+			return (byte)length;
+		}
+
+		private static byte[] BampCopyFreemIndexedBitmapBytes(Bitmap bitmap, PixelFormat format)
+		{
+			BitmapData bitmapData = bitmap.LockBits(
+				new Rectangle(0, 0, bitmap.Width, bitmap.Height),
+				ImageLockMode.ReadOnly,
+				format
+			);
+
+			try
+			{
+				int byteCount = Math.Abs(bitmapData.Stride) * bitmap.Height;
+				byte[] data = new byte[byteCount];
+				System.Runtime.InteropServices.Marshal.Copy(
+					bitmapData.Scan0,
+					data,
+					0,
+					byteCount
+				);
+				return data;
+			}
+			finally
+			{
+				bitmap.UnlockBits(bitmapData);
+			}
+		}
+
+		private static void BampWriteFreemIndexedTexture(
+			string filename,
+			Bitmap bitmap,
+			UInt16 paletteEntryCount,
+			byte[] indexedBytes)
+		{
+			using (FileStream stream = new FileStream(filename, FileMode.Create))
+			using (BinaryWriter writer = new BinaryWriter(stream))
+			{
+				writer.Write((byte)(bitmap.Width - 1));
+				writer.Write((byte)(bitmap.Height - 1));
+
+				byte[] npe = BitConverter.GetBytes(paletteEntryCount);
+				if (BitConverter.IsLittleEndian)
+				{
+					Array.Reverse(npe);
+				}
+				writer.Write(npe);
+
+				// Match freem's imported CI texture defaults.
+				writer.Write((byte)0); // HorizMirror
+				writer.Write((byte)0); // VertMirror
+				writer.Write(BampFreemTextureBitLength(bitmap.Width));
+				writer.Write(BampFreemTextureBitLength(bitmap.Height));
+
+				// Important: this is the indexed bitmap buffer freem's importer
+				// preserved. Do not feed it through the BAMP nibble/index repacker.
+				writer.Write(indexedBytes);
+			}
+		}
+
+		private static void BampWriteFreemPalette(
+			string filename,
+			ColorPalette sourcePalette,
+			int entryCount)
+		{
+			using (FileStream stream = new FileStream(filename, FileMode.Create))
+			using (BinaryWriter writer = new BinaryWriter(stream))
+			{
+				for (int i = 0; i < entryCount; i++)
+				{
+					Color color = (i < sourcePalette.Entries.Length)
+						? sourcePalette.Entries[i]
+						: Color.FromArgb(0, 0, 0, 0);
+
+					UInt16 value = N64Colors.ColorToValue5551(color);
+					byte[] bytes = BitConverter.GetBytes(value);
+					if (BitConverter.IsLittleEndian)
+					{
+						Array.Reverse(bytes);
+					}
+					writer.Write(bytes);
+				}
+			}
+		}
+
+		private void BampConvertPngFreemCompatible(int bitsPerPixel)
+		{
+			bool ci4 = (bitsPerPixel == 4);
+			PixelFormat requiredFormat = ci4
+				? PixelFormat.Format4bppIndexed
+				: PixelFormat.Format8bppIndexed;
+			int paletteEntries = ci4 ? 16 : 256;
+			string typeName = ci4 ? "CI4" : "CI8";
+			string textureExtension = ci4 ? ".ci4tex" : ".ci8tex";
+			string paletteExtension = ci4 ? ".ci4pal" : ".ci8pal";
+
+			OpenFileDialog ofd = new OpenFileDialog();
+			ofd.Title = "Convert replacement PNG to " + typeName + " (freem-compatible)";
+			ofd.Filter = "PNG files (*.png)|*.png|All Files (*.*)|*.*";
+
+			if (ofd.ShowDialog() != DialogResult.OK)
+			{
+				return;
+			}
+
+			using (Bitmap bitmap = new Bitmap(ofd.FileName))
+			{
+				if (bitmap.PixelFormat != requiredFormat)
+				{
+					Program.WarningMessageBox(
+						"This replacement converter intentionally uses freem's original indexed-PNG path.\n\n" +
+						"For " + typeName + ", the PNG must already be " +
+						(ci4 ? "4bpp indexed (16-color)." : "8bpp indexed (256-color).") +
+						"\n\nNo automatic palette remapping was performed.\n" +
+						"If you deliberately want BAMP to quantize/re-index the image, use:\n" +
+						"Danger Zone > BAMP Auto-index PNG Conversion."
+					);
+					return;
+				}
+
+				if (bitmap.Width < 1 || bitmap.Width > 256 ||
+					bitmap.Height < 1 || bitmap.Height > 256)
+				{
+					Program.ErrorMessageBox(
+						typeName + " dimensions must be between 1 and 256 pixels."
+					);
+					return;
+				}
+
+				byte[] indexedBytes =
+					BampCopyFreemIndexedBitmapBytes(bitmap, requiredFormat);
+
+				SaveFileDialog sfd = new SaveFileDialog();
+				sfd.Title = "Save " + typeName + " Texture";
+				sfd.Filter =
+					typeName + " Texture (*" + textureExtension + ")|*" +
+					textureExtension + "|All Files (*.*)|*.*";
+				sfd.FileName =
+					Path.GetFileNameWithoutExtension(ofd.FileName) +
+					textureExtension;
+
+				if (sfd.ShowDialog() != DialogResult.OK)
+				{
+					return;
+				}
+
+				string palettePath =
+					Path.ChangeExtension(sfd.FileName, paletteExtension);
+
+				BampWriteFreemIndexedTexture(
+					sfd.FileName,
+					bitmap,
+					(UInt16)paletteEntries,
+					indexedBytes
+				);
+				BampWriteFreemPalette(
+					palettePath,
+					bitmap.Palette,
+					paletteEntries
+				);
+
+				Program.InfoMessageBox(
+					String.Format(
+						"Freem-compatible {0} replacement conversion complete.\n\n" +
+						"Palette indices were preserved; no BAMP auto-quantization was used.\n\n" +
+						"Texture:\n{1}\n\nPalette:\n{2}",
+						typeName,
+						sfd.FileName,
+						palettePath
+					)
+				);
+			}
+		}
+
+		// These names are wired by the original WinForms designer.
+		// They are now the safe/default replacement conversion path.
+		private void pngToCi4ToolStripMenuItem_Click(object sender, EventArgs e)
+		{
+			BampConvertPngFreemCompatible(4);
+		}
+
+		private void pngToCi8ToolStripMenuItem_Click(object sender, EventArgs e)
+		{
+			BampConvertPngFreemCompatible(8);
+		}
 
 		private void pngToMenubgToolStripMenuItem_Click(object sender, EventArgs e)
 		{
