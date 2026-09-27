@@ -10,9 +10,10 @@ namespace VPWStudio.Editors.VPW2
     {
         // BAMP_VPW2_EXPANDED_THEME_MENU
         //
-        // The Ospreay/Omega 32-theme VPW2 build exposes selectors 00-1F,
-        // but those visible selectors are not the same thing as the song ID
-        // byte stored in WrestlerDefinition.ThemeSong.
+        // The Ospreay/Omega 32-theme VPW2 build exposes selectors 00-1F.
+        // WrestlerDefinition.ThemeSong stores that selector byte. The selector
+        // then resolves through the expanded music table to the real audio
+        // track ID shown alongside the FTID 0084 name.
         private const UInt16 BAMP_THEME_TEXT_FTID = 0x0084;
 
         private bool _bampExpandedThemeMenuActive = false;
@@ -283,42 +284,39 @@ namespace VPWStudio.Editors.VPW2
             WrestlerDefinition wdef =
                 WrestlerDefs[lbWrestlers.SelectedIndex];
 
-            byte actualTrackId = wdef.ThemeSong;
+            byte selector = wdef.ThemeSong;
 
             _bampThemeMenuLoading = true;
 
             try
             {
-                // LoadEntryData() is stock code and assigns ThemeSong directly
-                // to ComboBox.SelectedIndex. Expanded IDs can be > 0x1F, so
-                // temporarily give it a safe index, then restore the raw byte.
-                wdef.ThemeSong = 0;
+                // Stock VPW2 stores the visible theme selector in ThemeSong.
+                // The expanded build keeps that convention and expands the
+                // valid selector range from 00-0C to 00-1F.
+                //
+                // LoadEntryData() also refreshes all of the other wrestler
+                // controls, so keep using it. For an unknown raw selector,
+                // temporarily give the stock routine a safe index, then put
+                // the raw byte back so merely viewing a wrestler never
+                // destroys an unknown value.
+                wdef.ThemeSong =
+                    selector < _bampThemeMusicChoices.Count
+                    ? selector
+                    : (byte)0;
+
                 LoadEntryData(wdef);
             }
             finally
             {
-                wdef.ThemeSong = actualTrackId;
+                wdef.ThemeSong = selector;
             }
 
-            SelectBampThemeByTrackId(actualTrackId);
+            cbThemeMusic.SelectedIndex =
+                selector < _bampThemeMusicChoices.Count
+                ? selector
+                : -1;
 
             _bampThemeMenuLoading = false;
-        }
-
-        private void SelectBampThemeByTrackId(byte trackId)
-        {
-            int found = -1;
-
-            for (int i = 0; i < _bampThemeMusicChoices.Count; i++)
-            {
-                if (_bampThemeMusicChoices[i].TrackId == trackId)
-                {
-                    found = i;
-                    break;
-                }
-            }
-
-            cbThemeMusic.SelectedIndex = found;
         }
 
         private void BampThemeMusic_SelectedIndexChanged(
@@ -338,10 +336,12 @@ namespace VPWStudio.Editors.VPW2
                 _bampThemeMusicChoices[
                     cbThemeMusic.SelectedIndex];
 
-            // Save the actual expanded song/track byte, not the UI selector.
+            // ThemeSong is the menu selector byte. The expanded selector
+            // resolves to TrackId at runtime; TrackId is displayed for
+            // diagnostics but is not what belongs in WrestlerDefinition.
             WrestlerDefs[
                 lbWrestlers.SelectedIndex].ThemeSong =
-                    choice.TrackId;
+                    choice.Selector;
         }
     }
 }
