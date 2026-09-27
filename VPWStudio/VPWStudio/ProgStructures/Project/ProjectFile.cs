@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.IO;
 using System.Xml.Serialization;
 
@@ -33,6 +33,11 @@ namespace VPWStudio
 		/// todo: Eventually, this will be moved into a separate file, with
 		/// an entry in Settings pointing to it.
 		public FileTable ProjectFileTable;
+
+		/// <summary>
+		/// BAMP_RESOLVED_ROM_LAYOUT: locations resolved for the exact Base ROM SHA-1.
+		/// </summary>
+		public ResolvedRomLayout RomLayout;
 		#endregion
 
 		#region Constructors
@@ -44,6 +49,7 @@ namespace VPWStudio
 			ProjectFileVersion = CUR_PROJECTFILE_VER;
 			Settings = new ProjectSettings();
 			ProjectFileTable = new FileTable();
+			RomLayout = new ResolvedRomLayout();
 		}
 
 		/// <summary>
@@ -55,6 +61,7 @@ namespace VPWStudio
 			ProjectFileVersion = CUR_PROJECTFILE_VER;
 			Settings = new ProjectSettings();
 			ProjectFileTable = new FileTable();
+			RomLayout = new ResolvedRomLayout();
 
 			LoadFile(path);
 		}
@@ -69,6 +76,7 @@ namespace VPWStudio
 			ProjectFileVersion = _src.ProjectFileVersion;
 			Settings.DeepCopy(_src.Settings);
 			ProjectFileTable.DeepCopy(_src.ProjectFileTable);
+			RomLayout = (_src.RomLayout == null) ? new ResolvedRomLayout() : new ResolvedRomLayout(_src.RomLayout);
 		}
 
 		#region Project File Load/Save

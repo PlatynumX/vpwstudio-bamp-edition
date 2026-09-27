@@ -473,6 +473,17 @@ namespace VPWStudio
 			}
 
 			LoadLocationFile();
+
+			// BAMP_RESOLVED_ROM_LAYOUT: bind locations to the actual Base ROM before any editor reads them.
+			if (Program.CurrentInputROM != null)
+			{
+				if (Program.ResolveCurrentRomLayout(true))
+				{
+					Program.UnsavedChanges = true;
+					UpdateTitleBar();
+				}
+			}
+
 			LoadCodeSegDefs();
 
 			// if a custom location file is being used and the filetable's
@@ -736,6 +747,9 @@ namespace VPWStudio
 						Program.CurLocationFilePath = locPath;
 					}
 				}
+
+				// Resolve the new project's actual Base-ROM layout before creating its FileTable.
+				Program.ResolveCurrentRomLayout(false);
 
 				// generate initial filelist
 				if (Program.CurLocationFile != null)

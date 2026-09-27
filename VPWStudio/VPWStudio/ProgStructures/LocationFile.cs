@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
@@ -400,6 +400,25 @@ namespace VPWStudio
 		/// <param name="_comment">Comment to search for.</param>
 		/// <returns>LocationFileEntry with this comment, or null if not found.</returns>
 		public LocationFileEntry GetEntryFromComment(string _comment)
+		{
+			// BAMP_RESOLVED_ROM_LAYOUT: project/Base-ROM resolution overrides TXT offsets.
+			if (Program.CurrentProject != null && Program.CurrentProject.RomLayout != null)
+			{
+				LocationFileEntry resolved = Program.CurrentProject.RomLayout.GetLocationFileEntry(_comment);
+				if (resolved != null)
+				{
+					return resolved;
+				}
+			}
+
+			return GetRawEntryFromComment(_comment);
+		}
+
+		/// <summary>
+		/// Read the loaded TXT entry directly, bypassing the resolved project layout.
+		/// Resolver internals use this to avoid recursive lookups.
+		/// </summary>
+		public LocationFileEntry GetRawEntryFromComment(string _comment)
 		{
 			foreach (LocationFileEntry e in this.Locations)
 			{
