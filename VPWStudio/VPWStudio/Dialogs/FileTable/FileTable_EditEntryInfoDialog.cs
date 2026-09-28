@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Windows.Forms;
@@ -64,15 +64,24 @@ namespace VPWStudio
 			CurEntry.Comment = tbComment.Text;
 			CurEntry.ProjectSpecificComment = tbProjComment.Text;
 
-			// Attempt to convert absolute paths to relative, so the project files take up less space.
-			string relPath = Program.ShortenAbsolutePath(tbReplaceFilePath.Text);
-			if (relPath != null)
+			// BAMP_ABSOLUTE_REPLACEMENT_PATH_FIX
+			//
+			// OpenFileDialog and drag/drop both give us the user's real absolute
+			// path. Do not run that path through ShortenAbsolutePath here: the
+			// legacy helper deliberately strips the project-directory prefix,
+			// including the drive/root portion, before the project XML is saved.
+			//
+			// Preserve rooted paths exactly as full Windows paths. Existing/manual
+			// relative paths are left relative for backwards compatibility.
+			string replacementPath = tbReplaceFilePath.Text;
+			if (!String.IsNullOrWhiteSpace(replacementPath) &&
+				Path.IsPathRooted(replacementPath))
 			{
-				CurEntry.ReplaceFilePath = relPath;
+				CurEntry.ReplaceFilePath = Path.GetFullPath(replacementPath);
 			}
 			else
 			{
-				CurEntry.ReplaceFilePath = tbReplaceFilePath.Text;
+				CurEntry.ReplaceFilePath = replacementPath;
 			}
 
 			CurEntry.ReplaceEncoding = (FileTableReplaceEncoding)cbReplaceEncoding.SelectedIndex;
