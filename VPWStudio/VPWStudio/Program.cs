@@ -122,6 +122,295 @@ namespace VPWStudio
 			Application.Run(AppMainForm);
 		}
 
+        /// <summary>
+        /// Resolve all known logical ROM locations for the exact loaded Base ROM.
+        /// Returns true when project state should be saved (new SHA/layout or FileTable refresh).
+        /// BAMP_RESOLVED_ROM_LAYOUT
+        /// </summary>
+        public static bool ResolveCurrentRomLayout(bool reconcileProjectFileTable)
+        {
+            if (CurrentProject == null || CurrentInputROM == null || CurrentInputROM.Data == null)
+            {
+                return false;
+            }
+
+            ResolvedRomLayout previous = CurrentProject.RomLayout;
+            LocationFile stockLocations = null;
+
+            if (CurrentProject.Settings.UseCustomLocationFile)
+            {
+                string stockPath = GetBuiltInLocationFilePath(CurrentProject.Settings.GameType);
+                if (!String.IsNullOrEmpty(stockPath) && File.Exists(stockPath))
+                {
+                    stockLocations = new LocationFile();
+                    stockLocations.LoadFile(stockPath);
+                }
+            }
+            else
+            {
+                stockLocations = CurLocationFile;
+            }
+
+            ResolvedRomLayout resolved = RomLayoutResolver.Resolve(
+                CurrentInputROM,
+                CurLocationFile,
+                stockLocations,
+                CurrentProject.Settings.UseCustomLocationFile,
+                CurrentProject.Settings.GameType,
+                previous,
+                CurrentProject.ProjectFileTable);
+
+            bool changed = previous == null ||
+                !String.Equals(previous.RomSha1, resolved.RomSha1, StringComparison.OrdinalIgnoreCase) ||
+                previous.ResolverVersion != resolved.ResolverVersion ||
+                previous.CoreValidated != resolved.CoreValidated ||
+                !SameResolvedCore(previous, resolved);
+
+            CurrentProject.RomLayout = resolved;
+
+            if (reconcileProjectFileTable && resolved.CoreValidated)
+            {
+                changed |= ReconcileProjectFileTableFromCurrentRom();
+            }
+
+            return changed;
+        }
+
+        private static string GetBuiltInLocationFilePath(SpecificGame gameType)
+        {
+            string lfn = GameInformation.GameDefs[gameType].GameCode + ".txt";
+            switch (gameType)
+            {
+                case SpecificGame.NoMercy_Proto_NTSC_June2000: lfn = "NoMercy_June2000.txt"; break;
+                case SpecificGame.NoMercy_Proto_NTSC_July2000: lfn = "NoMercy_Jul2000.txt"; break;
+                case SpecificGame.NoMercy_Proto_NTSC_August2000: lfn = "NoMercy_Aug2000.txt"; break;
+                case SpecificGame.NoMercy_Proto_NTSC_September2000: lfn = "NoMercy_Sep2000.txt"; break;
+            }
+            return Path.Combine(Path.GetDirectoryName(Application.ExecutablePath), "LocationFiles", lfn);
+        }
+
+        private static bool SameResolvedCore(ResolvedRomLayout a, ResolvedRomLayout b)
+        {
+            if (a == null || b == null)
+            {
+                return false;
+            }
+            ResolvedRomLocation aft = a.Get(LocationFile.SpecialEntryStrings["FileTable"]);
+            ResolvedRomLocation aff = a.Get(LocationFile.SpecialEntryStrings["FirstFile"]);
+            ResolvedRomLocation bft = b.Get(LocationFile.SpecialEntryStrings["FileTable"]);
+            ResolvedRomLocation bff = b.Get(LocationFile.SpecialEntryStrings["FirstFile"]);
+            if (aft == null || aff == null || bft == null || bff == null)
+            {
+                return aft == null && aff == null && bft == null && bff == null;
+            }
+            return aft.Address == bft.Address && aft.Length == bft.Length &&
+                   aff.Address == bff.Address;
+        }
+
+        /// <summary>
+        /// Refresh ROM-derived FileTable offsets/encoding while preserving VPWStudio metadata and
+        /// replacement settings. This is what makes an existing project follow a modified Base ROM
+        /// without throwing away its user edits.
+        /// </summary>
+        private static bool ReconcileProjectFileTableFromCurrentRom()
+        {
+            if (CurrentProject == null ||
+                CurrentProject.RomLayout == null ||
+                CurrentInputROM == null)
+            {
+                return false;
+            }
+
+            LocationFileEntry ft =
+                CurrentProject.RomLayout.GetLocationFileEntry(
+                    LocationFile.SpecialEntryStrings["FileTable"]);
+
+            LocationFileEntry ff =
+                CurrentProject.RomLayout.GetLocationFileEntry(
+                    LocationFile.SpecialEntryStrings["FirstFile"]);
+
+            if (ft == null ||
+                ff == null ||
+                ft.Length <= 0 ||
+                (ft.Length & 3) != 0)
+            {
+                return false;
+            }
+
+            FileTable fresh =
+                new FileTable(ft.Address, ff.Address);
+
+            using (MemoryStream ms =
+                new MemoryStream(CurrentInputROM.Data))
+            using (BinaryReader br = new BinaryReader(ms))
+            {
+                ms.Seek(ft.Address, SeekOrigin.Begin);
+                fresh.Read(br, ft.Length);
+            }
+
+            FileTable current =
+                CurrentProject.ProjectFileTable;
+
+            // New/empty project: there is no project metadata to preserve.
+            if (current == null ||
+                current.Entries == null ||
+                current.Entries.Count == 0)
+            {
+                CurrentProject.ProjectFileTable = fresh;
+                return true;
+            }
+
+            // BAMP_REPLACEMENT_PATH_PRESERVATION
+            //
+            // Do NOT replace ProjectFileTable with a newly allocated table.
+            // Editors can hold FileTableEntry references, and replacement paths
+            // are project state rather than ROM-derived state. Reconcile only
+            // the fields the Base ROM owns: table address, FirstFile, entry
+            // Location, and IsEncoded.
+            Dictionary<int, string> replacementPaths =
+                new Dictionary<int, string>();
+
+            foreach (
+                KeyValuePair<int, FileTableEntry> pair
+                in current.Entries)
+            {
+                string path =
+                    pair.Value == null
+                    ? String.Empty
+                    : pair.Value.ReplaceFilePath;
+
+                if (!String.IsNullOrEmpty(path))
+                {
+                    replacementPaths[pair.Key] = path;
+                }
+            }
+
+            bool changed = false;
+
+            if (current.Location != ft.Address)
+            {
+                current.Location = ft.Address;
+                changed = true;
+            }
+
+            if (current.FirstFile != ff.Address)
+            {
+                current.FirstFile = ff.Address;
+                changed = true;
+            }
+
+            foreach (
+                KeyValuePair<int, FileTableEntry> pair
+                in fresh.Entries)
+            {
+                int id = pair.Key;
+                FileTableEntry romEntry = pair.Value;
+
+                if (!current.Entries.ContainsKey(id))
+                {
+                    current.Entries.Add(
+                        id,
+                        new FileTableEntry(romEntry));
+                    changed = true;
+                    continue;
+                }
+
+                FileTableEntry projectEntry =
+                    current.Entries[id];
+
+                if (projectEntry.Location != romEntry.Location)
+                {
+                    projectEntry.Location = romEntry.Location;
+                    changed = true;
+                }
+
+                if (projectEntry.IsEncoded != romEntry.IsEncoded)
+                {
+                    projectEntry.IsEncoded = romEntry.IsEncoded;
+                    changed = true;
+                }
+
+                // Deliberately preserved on the existing object:
+                // FileType, Comment, ProjectSpecificComment, ReplaceEncoding,
+                // ReplaceFilePath, OverrideFileType, ExtraData.
+            }
+
+            // Remove ROM entries that no longer exist only when they carry no
+            // user-owned project state. Never silently discard a replacement.
+            List<int> staleIds = new List<int>();
+
+            foreach (
+                KeyValuePair<int, FileTableEntry> pair
+                in current.Entries)
+            {
+                if (!fresh.Entries.ContainsKey(pair.Key))
+                {
+                    staleIds.Add(pair.Key);
+                }
+            }
+
+            foreach (int id in staleIds)
+            {
+                FileTableEntry entry =
+                    current.Entries[id];
+
+                bool hasUserState =
+                    entry != null &&
+                    (
+                        !String.IsNullOrEmpty(entry.ReplaceFilePath) ||
+                        !String.IsNullOrEmpty(entry.ProjectSpecificComment) ||
+                        entry.OverrideFileType
+                    );
+
+                if (hasUserState)
+                {
+                    throw new InvalidDataException(
+                        String.Format(
+                            "Resolved Base-ROM FileTable no longer contains " +
+                            "FTID {0:X4}, but that project entry has user " +
+                            "metadata/replacement data. Reconciliation was " +
+                            "stopped so the replacement path cannot be lost.",
+                            id));
+                }
+
+                current.Entries.Remove(id);
+                changed = true;
+            }
+
+            // Hard integrity guard: every replacement path present before
+            // reconciliation must still exist exactly unchanged afterward.
+            foreach (
+                KeyValuePair<int, string> saved
+                in replacementPaths)
+            {
+                if (!current.Entries.ContainsKey(saved.Key))
+                {
+                    throw new InvalidDataException(
+                        String.Format(
+                            "Replacement path integrity failure at FTID {0:X4}: " +
+                            "the entry disappeared during reconciliation.",
+                            saved.Key));
+                }
+
+                string after =
+                    current.Entries[saved.Key].ReplaceFilePath;
+
+                if (!String.Equals(
+                    saved.Value,
+                    after,
+                    StringComparison.Ordinal))
+                {
+                    throw new InvalidDataException(
+                        String.Format(
+                            "Replacement path integrity failure at FTID {0:X4}. " +
+                            "Reconciliation refused to alter the saved path.",
+                            saved.Key));
+                }
+            }
+
+            return changed;
+        }
+
 		#region Helpers
 		public static string GetVersionString()
 		{

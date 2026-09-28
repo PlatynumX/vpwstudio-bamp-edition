@@ -522,6 +522,10 @@
     <Compile Include="Editors\VPW2\WrestlerMain_VPW2.cs">
       <SubType>Form</SubType>
     </Compile>
+
+    <Compile Include="Editors\VPW2\WrestlerMain_VPW2.BampThemes.cs">
+      <DependentUpon>WrestlerMain_VPW2.cs</DependentUpon>
+    </Compile>
     <Compile Include="Editors\VPW2\WrestlerMain_VPW2.Designer.cs">
       <DependentUpon>WrestlerMain_VPW2.cs</DependentUpon>
     </Compile>
@@ -614,6 +618,7 @@
     <Compile Include="ProgStructures\UiManagers\AkiTextEditorManager.cs" />
     <Compile Include="ProgStructures\UiManagers\HexViewerManager.cs" />
     <Compile Include="ProgStructures\LocationFile.cs" />
+    <Compile Include="ProgStructures\ResolvedRomLayout.cs" />
     <Compile Include="ProgStructures\Project\ProjectFile.cs" />
     <Compile Include="Dialogs\Project\NewProjectDialog.cs">
       <SubType>Form</SubType>
