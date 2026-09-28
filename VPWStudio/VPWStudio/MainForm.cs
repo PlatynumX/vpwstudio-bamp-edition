@@ -2705,7 +2705,10 @@ namespace VPWStudio
                 }
 
                 Ci4Texture texture = new Ci4Texture();
-                if (!texture.FromBitmap(bitmap))
+                if (!texture.FromIndexedData(
+                    bitmap.Width,
+                    bitmap.Height,
+                    indices))
                 {
                     Program.ErrorMessageBox(
                         "Unable to convert this PNG to CI4.");
@@ -2803,7 +2806,10 @@ namespace VPWStudio
                 }
 
                 Ci8Texture texture = new Ci8Texture();
-                if (!texture.FromBitmap(bitmap))
+                if (!texture.FromIndexedData(
+                    bitmap.Width,
+                    bitmap.Height,
+                    indices))
                 {
                     Program.ErrorMessageBox(
                         "Unable to convert this PNG to CI8.");

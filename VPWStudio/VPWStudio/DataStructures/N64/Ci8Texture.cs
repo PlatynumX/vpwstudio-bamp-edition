@@ -122,16 +122,16 @@ namespace VPWStudio
             return bOut;
         }
 
+        // BAMP_DIRECT_PNG_INDEX_PRESERVATION
+        //
+        // Default/direct PNG replacement must behave like freem VPWStudio:
+        // indexed PNG palette indices are authoritative and must not be
+        // re-quantized. The ROM normally keeps its existing palette file,
+        // so changing the pixel indices here corrupts the rendered texture.
         public bool FromBitmap(Bitmap inBmp)
         {
-            if (inBmp == null)
-            {
-                return false;
-            }
-
-            Color[] colors;
-            byte[] pixels;
-            if (!TextureConversionHelper.TryConvertBitmapToIndexed(inBmp, 256, -1, out colors, out pixels))
+            if (inBmp == null ||
+                inBmp.PixelFormat != PixelFormat.Format8bppIndexed)
             {
                 return false;
             }
@@ -139,7 +139,54 @@ namespace VPWStudio
             Width = inBmp.Width;
             Height = inBmp.Height;
             NumPalEntries = 256;
-            Data = pixels;
+            Data = new byte[Width * Height];
+            CalculateBitLengths();
+
+            BitmapData bData = inBmp.LockBits(
+                new Rectangle(0, 0, Width, Height),
+                ImageLockMode.ReadOnly,
+                PixelFormat.Format8bppIndexed);
+
+            try
+            {
+                int stride = bData.Stride;
+                int rowBytes = Width;
+                byte[] row = new byte[Math.Abs(stride)];
+
+                for (int y = 0; y < Height; y++)
+                {
+                    IntPtr rowPtr = IntPtr.Add(bData.Scan0, y * stride);
+                    Marshal.Copy(rowPtr, row, 0, row.Length);
+                    Buffer.BlockCopy(row, 0, Data, y * Width, rowBytes);
+                }
+            }
+            finally
+            {
+                inBmp.UnlockBits(bData);
+            }
+
+            return true;
+        }
+
+        /// <summary>
+        /// Explicit BAMP auto-index path used only by the Danger Zone converter.
+        /// The supplied values are already quantized palette indices.
+        /// </summary>
+        public bool FromIndexedData(int width, int height, byte[] pixels)
+        {
+            if (width <= 0 ||
+                height <= 0 ||
+                pixels == null ||
+                pixels.Length < (width * height))
+            {
+                return false;
+            }
+
+            Width = width;
+            Height = height;
+            NumPalEntries = 256;
+            Data = new byte[Width * Height];
+            Buffer.BlockCopy(pixels, 0, Data, 0, Data.Length);
             CalculateBitLengths();
             return true;
         }

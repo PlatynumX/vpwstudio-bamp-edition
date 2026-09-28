@@ -145,16 +145,15 @@ namespace VPWStudio
             return bOut;
         }
 
+        // BAMP_DIRECT_PNG_INDEX_PRESERVATION
+        //
+        // Default/direct PNG replacement must preserve the source PNG's
+        // existing 4-bit palette indices. The newer BAMP quantizer belongs
+        // only to the explicit Danger Zone conversion path.
         public bool FromBitmap(Bitmap inBmp)
         {
-            if (inBmp == null)
-            {
-                return false;
-            }
-
-            Color[] colors;
-            byte[] pixels;
-            if (!TextureConversionHelper.TryConvertBitmapToIndexed(inBmp, 16, -1, out colors, out pixels))
+            if (inBmp == null ||
+                inBmp.PixelFormat != PixelFormat.Format4bppIndexed)
             {
                 return false;
             }
@@ -162,7 +161,67 @@ namespace VPWStudio
             Width = inBmp.Width;
             Height = inBmp.Height;
             NumPalEntries = 16;
-            Data = pixels;
+            Data = new byte[Width * Height];
+            CalculateBitLengths();
+
+            BitmapData bData = inBmp.LockBits(
+                new Rectangle(0, 0, Width, Height),
+                ImageLockMode.ReadOnly,
+                PixelFormat.Format4bppIndexed);
+
+            try
+            {
+                int stride = bData.Stride;
+                int packedRowBytes = (Width + 1) / 2;
+                byte[] row = new byte[Math.Abs(stride)];
+
+                for (int y = 0; y < Height; y++)
+                {
+                    IntPtr rowPtr = IntPtr.Add(bData.Scan0, y * stride);
+                    Marshal.Copy(rowPtr, row, 0, row.Length);
+
+                    for (int x = 0; x < Width; x++)
+                    {
+                        byte packed = row[x >> 1];
+                        Data[(y * Width) + x] =
+                            (byte)(((x & 1) == 0)
+                                ? ((packed >> 4) & 0x0F)
+                                : (packed & 0x0F));
+                    }
+                }
+            }
+            finally
+            {
+                inBmp.UnlockBits(bData);
+            }
+
+            return true;
+        }
+
+        /// <summary>
+        /// Explicit BAMP auto-index path used only by the Danger Zone converter.
+        /// pixels contains one already-quantized palette index per pixel.
+        /// </summary>
+        public bool FromIndexedData(int width, int height, byte[] pixels)
+        {
+            if (width <= 0 ||
+                height <= 0 ||
+                pixels == null ||
+                pixels.Length < (width * height))
+            {
+                return false;
+            }
+
+            Width = width;
+            Height = height;
+            NumPalEntries = 16;
+            Data = new byte[Width * Height];
+
+            for (int i = 0; i < Data.Length; i++)
+            {
+                Data[i] = (byte)(pixels[i] & 0x0F);
+            }
+
             CalculateBitLengths();
             return true;
         }
