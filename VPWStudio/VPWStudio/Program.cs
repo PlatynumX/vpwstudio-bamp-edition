@@ -780,6 +780,168 @@ namespace VPWStudio
 		/// <param name="addr1">Address 1</param>
 		/// <param name="addr2">Address 2</param>
 		/// <param name="difference">Difference</param>
+        // BAMP_STABLE_32THEME_EXPANSION_TAIL
+        //
+        // Stage12 32-theme starts a fixed-address expansion layout at 0x02000000.
+        // TEST30 later relies on the same absolute layout for streamed weapon code
+        // (0x03F00000) and its relocated FileTable (0x03FE0000).
+        //
+        // FileTable replacement files may still grow or shrink normally. We use
+        // the verified FF slack immediately below 0x02000000 to absorb the net
+        // size change so the expansion tail never moves.
+        private const int BampExpandedTailAnchor = 0x02000000;
+        private const int BampExpandedRomSize = 0x04000000;
+
+        private static UInt32 BampReadBe32(byte[] data, int offset)
+        {
+            return
+                ((UInt32)data[offset] << 24) |
+                ((UInt32)data[offset + 1] << 16) |
+                ((UInt32)data[offset + 2] << 8) |
+                data[offset + 3];
+        }
+
+        private static bool BampHasStable32ThemeExpansionTail()
+        {
+            if (CurrentProject == null ||
+                CurrentInputROM == null ||
+                CurrentInputROM.Data == null ||
+                CurrentProject.Settings.BaseGame != VPWGames.VPW2 ||
+                CurrentInputROM.Data.Length != BampExpandedRomSize)
+            {
+                return false;
+            }
+
+            byte[] data = CurrentInputROM.Data;
+
+            if (BampReadBe32(data, 0x43CC) != 0x3C100200)
+            {
+                return false;
+            }
+
+            if (BampReadBe32(data, BampExpandedTailAnchor + 0x20) != 29)
+            {
+                return false;
+            }
+
+            return true;
+        }
+
+        private static Int32 BampReadAddressPair(
+            List<byte> romData,
+            int addr1,
+            int addr2)
+        {
+            Int16 high =
+                (Int16)(
+                    (romData[addr1] << 8) |
+                    romData[addr1 + 1]);
+
+            Int16 low =
+                (Int16)(
+                    (romData[addr2] << 8) |
+                    romData[addr2 + 1]);
+
+            return ((Int32)high << 16) + low;
+        }
+
+        private static int BampGetPointerRelocationDifference(
+            List<byte> romData,
+            int addr1,
+            int addr2,
+            int totalDifference,
+            bool stableExpandedTail)
+        {
+            if (!stableExpandedTail || totalDifference == 0)
+            {
+                return totalDifference;
+            }
+
+            UInt32 target =
+                unchecked(
+                    (UInt32)BampReadAddressPair(
+                        romData,
+                        addr1,
+                        addr2));
+
+            return target >= BampExpandedTailAnchor
+                ? 0
+                : totalDifference;
+        }
+
+        private static void BampStabilizeExpandedTail(
+            List<byte> romData,
+            int totalDifference)
+        {
+            if (totalDifference == 0)
+            {
+                return;
+            }
+
+            if (totalDifference > 0)
+            {
+                if (BampExpandedTailAnchor + totalDifference > romData.Count)
+                {
+                    throw new InvalidDataException(
+                        "BAMP expansion-tail stabilization exceeds the output ROM.");
+                }
+
+                for (int i = 0; i < totalDifference; i++)
+                {
+                    if (romData[BampExpandedTailAnchor + i] != 0xFF)
+                    {
+                        throw new InvalidDataException(
+                            String.Format(
+                                "BAMP cannot absorb a +0x{0:X} FileTable size change: " +
+                                "the reserved FF gap below ROM 0x02000000 is exhausted.",
+                                totalDifference));
+                    }
+                }
+
+                romData.RemoveRange(
+                    BampExpandedTailAnchor,
+                    totalDifference);
+            }
+            else
+            {
+                int padCount = -totalDifference;
+                int originalGapStart =
+                    BampExpandedTailAnchor - padCount;
+
+                if (originalGapStart < 0 ||
+                    CurrentInputROM == null ||
+                    CurrentInputROM.Data == null)
+                {
+                    throw new InvalidDataException(
+                        "BAMP expansion-tail stabilization has an invalid pad range.");
+                }
+
+                for (int i = originalGapStart;
+                     i < BampExpandedTailAnchor;
+                     i++)
+                {
+                    if (CurrentInputROM.Data[i] != 0xFF)
+                    {
+                        throw new InvalidDataException(
+                            String.Format(
+                                "BAMP cannot absorb a -0x{0:X} FileTable size change: " +
+                                "the reserved FF gap below ROM 0x02000000 is exhausted.",
+                                padCount));
+                    }
+                }
+
+                byte[] padding = new byte[padCount];
+                for (int i = 0; i < padding.Length; i++)
+                {
+                    padding[i] = 0xFF;
+                }
+
+                romData.InsertRange(
+                    BampExpandedTailAnchor + totalDifference,
+                    padding);
+            }
+        }
+
 		public static void FixAddresses(List<byte> romData, int addr1, int addr2, int difference)
 		{
 			byte[] high = new byte[]
@@ -1620,6 +1782,18 @@ namespace VPWStudio
 			// keep a running total of differences in file sizes.
 			int totalDifference = 0;
 
+            bool stableBampExpandedTail =
+                BampHasStable32ThemeExpansionTail();
+
+            if (stableBampExpandedTail)
+            {
+                BuildLogPub.AddLine(
+                    "BAMP Stage12/TEST30 expansion layout detected; " +
+                    "ROM >= 0x02000000 will retain its original absolute addresses.",
+                    true,
+                    BuildLogEventPublisher.BuildLogVerbosity.Minimal);
+            }
+
 			// (File IDs start at 0x0001, and Entries is a SortedList with the file ID as Key.)
 			for (int i = 1; i <= buildFileTable.Entries.Count; i++)
 			{
@@ -1783,6 +1957,30 @@ namespace VPWStudio
 				}
 			}
 
+            // Keep Stage12 / TEST30 / kik expansion data pinned to the
+            // absolute ROM addresses used by their custom loaders and hooks.
+            if (stableBampExpandedTail && totalDifference != 0)
+            {
+                BampStabilizeExpandedTail(
+                    outRomData,
+                    totalDifference);
+
+                BuildLogPub.AddLine(
+                    String.Format(
+                        "Absorbed FileTable net size change {0:+#;-#;0} bytes " +
+                        "in the reserved pre-expansion FF gap.",
+                        totalDifference),
+                    true,
+                    BuildLogEventPublisher.BuildLogVerbosity.Minimal);
+            }
+
+            int fileTableDifference =
+                (stableBampExpandedTail &&
+                 CurrentProject.ProjectFileTable.Location >=
+                    BampExpandedTailAnchor)
+                ? 0
+                : totalDifference;
+
 			// write new filetable data
 			MemoryStream finalTableMS = new MemoryStream();
 			BinaryWriter finalTableBW = new BinaryWriter(finalTableMS);
@@ -1790,12 +1988,12 @@ namespace VPWStudio
 
 			BuildLogPub.AddLine(String.Format("TotalDifference final: {0}", totalDifference), true, BuildLogEventPublisher.BuildLogVerbosity.Detailed);
 			BuildLogPub.AddLine(String.Format("old ft location {0:X}", CurrentProject.ProjectFileTable.Location), true, BuildLogEventPublisher.BuildLogVerbosity.Detailed);
-			BuildLogPub.AddLine(String.Format("new ft location {0:X}", buildFileTable.Location + totalDifference), true, BuildLogEventPublisher.BuildLogVerbosity.Detailed);
+			BuildLogPub.AddLine(String.Format("new ft location {0:X}", buildFileTable.Location + fileTableDifference), true, BuildLogEventPublisher.BuildLogVerbosity.Detailed);
 			BuildLogPub.AddLine(BuildLogEventPublisher.BuildLogVerbosity.Detailed);
 
 			// rewrite filetable
-			outRomData.RemoveRange((int)(CurrentProject.ProjectFileTable.Location + totalDifference), (CurrentProject.ProjectFileTable.Entries.Count * 4));
-			outRomData.InsertRange((int)(CurrentProject.ProjectFileTable.Location + totalDifference), finalTableMS.ToArray());
+			outRomData.RemoveRange((int)(CurrentProject.ProjectFileTable.Location + fileTableDifference), (CurrentProject.ProjectFileTable.Entries.Count * 4));
+			outRomData.InsertRange((int)(CurrentProject.ProjectFileTable.Location + fileTableDifference), finalTableMS.ToArray());
 
 			finalTableBW.Close();
 			#endregion
@@ -1817,7 +2015,7 @@ namespace VPWStudio
 				{
 					// use %SETUPFT_FTLOCATION
 					FoundFileTableLocValues = true;
-					FixAddresses(outRomData, (int)(ftLoc.Address), (int)(ftLoc.Address + ftLoc.Length), totalDifference);
+					FixAddresses(outRomData, (int)(ftLoc.Address), (int)(ftLoc.Address + ftLoc.Length), fileTableDifference);
 				}
 				#endregion
 
@@ -1836,7 +2034,19 @@ namespace VPWStudio
 				{
 					foreach (LocationFileEntry lfe in SoundEntries)
 					{
-						FixAddresses(outRomData, (int)lfe.Address, (int)(lfe.Address + lfe.Length), totalDifference);
+						int soundDifference =
+                            BampGetPointerRelocationDifference(
+                                outRomData,
+                                (int)lfe.Address,
+                                (int)(lfe.Address + lfe.Length),
+                                totalDifference,
+                                stableBampExpandedTail);
+
+                        FixAddresses(
+                            outRomData,
+                            (int)lfe.Address,
+                            (int)(lfe.Address + lfe.Length),
+                            soundDifference);
 					}
 					HasSoundLocations = true;
 				}
@@ -1888,7 +2098,7 @@ namespace VPWStudio
 				// [SetupFiletable]
 				// fix filetable location
 				DefaultGameData.DefaultLocationDataEntry dlde = DefaultGameData.DefaultLocations[CurrentProject.Settings.GameType].Locations["SetupFT_FTLocation"];
-				FixAddresses(outRomData, (int)dlde.Offset, (int)(dlde.Offset + dlde.Length), totalDifference);
+				FixAddresses(outRomData, (int)dlde.Offset, (int)(dlde.Offset + dlde.Length), fileTableDifference);
 
 				// [GetFileLocation]
 				// todo: we don't currently support adding/removing entries from the filetable.
@@ -1905,7 +2115,19 @@ namespace VPWStudio
 				{
 					foreach (DefaultGameData.DefaultLocationDataEntry soundLoc in DefaultGameData.SoundOffsets[CurrentProject.Settings.GameType].Locations.Values)
 					{
-						FixAddresses(outRomData, (int)soundLoc.Offset, (int)(soundLoc.Offset + soundLoc.Length), totalDifference);
+						int soundDifference =
+                            BampGetPointerRelocationDifference(
+                                outRomData,
+                                (int)soundLoc.Offset,
+                                (int)(soundLoc.Offset + soundLoc.Length),
+                                totalDifference,
+                                stableBampExpandedTail);
+
+                        FixAddresses(
+                            outRomData,
+                            (int)soundLoc.Offset,
+                            (int)(soundLoc.Offset + soundLoc.Length),
+                            soundDifference);
 					}
 					HasSoundLocations = true;
 				}
